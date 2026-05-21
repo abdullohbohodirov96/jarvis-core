@@ -1,0 +1,285 @@
+# =============================================================================
+# JARVIS AI Assistant — Render deployment configuration
+# https://render.com/docs/blueprint-spec
+# =============================================================================
+#
+# Deploy to Render:
+#   1. Push this repository to GitHub
+#   2. In Render Dashboard → New → Blueprint
+#   3. Connect your repository
+#   4. Render reads this render.yaml and provisions all services automatically
+#
+# Environment variable groups:
+#   - Create an env group "jarvis-secrets" in Render with all sensitive values
+#   - Or set them individually per service below
+# =============================================================================
+
+version: "1"
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # FastAPI web service (API)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: jarvis-api
+    env: python
+    plan: standard          # 1 CPU, 2 GB RAM — upgrade to pro for production
+    region: oregon          # us-west-2
+
+    # Source code location
+    rootDir: backend
+
+    # Python version
+    runtime: python
+    pythonVersion: "3.11"
+
+    buildCommand: |
+      apt-get update -qq && \
+      apt-get install -y --no-install-recommends ffmpeg libsndfile1 portaudio19-dev && \
+      pip install --upgrade pip && \
+      pip install -r requirements.txt
+
+    startCommand: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port $PORT
+      --workers 2
+      --loop uvloop
+      --http httptools
+      --log-level info
+      --access-log
+      --proxy-headers
+      --forwarded-allow-ips "*"
+
+    healthCheckPath: /health
+
+    autoDeploy: true
+
+    # Pull environment variables from the shared group + service-specific overrides
+    envVars:
+      - fromGroup: jarvis-secrets
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_FORMAT
+        value: json
+      - key: APP_NAME
+        value: JARVIS
+      - key: APP_VERSION
+        value: "1.0.0"
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: DATABASE_POOL_SIZE
+        value: "5"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "10"
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: OPENAI_MAX_TOKENS
+        value: "4096"
+      - key: OPENAI_TEMPERATURE
+        value: "0.7"
+      - key: WHISPER_MODEL
+        value: base
+      - key: WHISPER_USE_API
+        value: "false"
+      - key: TTS_PROVIDER
+        value: edge
+      - key: EDGE_TTS_VOICE
+        value: en-US-AriaNeural
+      - key: VOICE_SAMPLE_RATE
+        value: "16000"
+      - key: VOICE_CHUNK_DURATION
+        value: "0.5"
+      - key: MAX_MEMORY_ITEMS
+        value: "1000"
+      - key: MEMORY_DECAY_HOURS
+        value: "720"
+      - key: MEMORY_IMPORTANCE_THRESHOLD
+        value: "0.3"
+      - key: REMINDER_CHECK_INTERVAL
+        value: "60"
+      - key: DAILY_SUMMARY_HOUR
+        value: "9"
+      - key: MORNING_BRIEFING_HOUR
+        value: "8"
+      - key: RATE_LIMIT_REQUESTS
+        value: "100"
+      - key: RATE_LIMIT_WINDOW
+        value: "60"
+      # DATABASE_URL — auto-populated from the database block below
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jarvis-postgres
+          property: connectionString
+      # Redis — set manually (Render does not manage Redis in free tier)
+      # Use Redis Cloud (https://redis.com/try-free/) or Upstash (https://upstash.com/)
+      - key: REDIS_URL
+        sync: false         # Must be set manually in the Render dashboard
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      # Secrets — set via "jarvis-secrets" env group or manually
+      - key: SECRET_KEY
+        generateValue: true  # Render auto-generates a secure random value
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_PHONE
+        sync: false
+      - key: TELEGRAM_SESSION_NAME
+        value: jarvis_session
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # Celery worker (background task processing)
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: jarvis-worker
+    env: python
+    plan: standard
+    region: oregon
+
+    rootDir: backend
+
+    buildCommand: |
+      apt-get update -qq && \
+      apt-get install -y --no-install-recommends ffmpeg libsndfile1 portaudio19-dev && \
+      pip install --upgrade pip && \
+      pip install -r requirements.txt
+
+    startCommand: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --concurrency=4
+      -Q default,reminders,ai_tasks,voice_tasks,telegram_tasks
+      --hostname=worker@%h
+      --max-tasks-per-child=500
+      --prefetch-multiplier=1
+      --without-gossip
+      --without-mingle
+
+    autoDeploy: true
+
+    envVars:
+      - fromGroup: jarvis-secrets
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_FORMAT
+        value: json
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jarvis-postgres
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_PHONE
+        sync: false
+      - key: TELEGRAM_SESSION_NAME
+        value: jarvis_session
+      - key: WHISPER_MODEL
+        value: base
+      - key: MAX_MEMORY_ITEMS
+        value: "1000"
+      - key: MEMORY_DECAY_HOURS
+        value: "720"
+      - key: REMINDER_CHECK_INTERVAL
+        value: "60"
+
+  # ---------------------------------------------------------------------------
+  # Celery beat (periodic task scheduler — one instance only)
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: jarvis-beat
+    env: python
+    plan: starter            # Beat is lightweight; starter plan is sufficient
+    region: oregon
+
+    rootDir: backend
+
+    buildCommand: |
+      pip install --upgrade pip && \
+      pip install -r requirements.txt
+
+    startCommand: >
+      celery -A app.workers.celery_app beat
+      --loglevel=info
+      --scheduler celery.beat:PersistentScheduler
+      --schedule /tmp/celerybeat-schedule
+
+    autoDeploy: true
+
+    # IMPORTANT: Only ever run ONE instance of beat to avoid duplicate scheduled tasks
+    numInstances: 1
+
+    envVars:
+      - fromGroup: jarvis-secrets
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jarvis-postgres
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: DAILY_SUMMARY_HOUR
+        value: "9"
+      - key: MORNING_BRIEFING_HOUR
+        value: "8"
+      - key: REMINDER_CHECK_INTERVAL
+        value: "60"
+
+# ---------------------------------------------------------------------------
+# Managed PostgreSQL database
+# ---------------------------------------------------------------------------
+databases:
+  - name: jarvis-postgres
+    databaseName: jarvisdb
+    user: jarvis
+    plan: starter            # Upgrade to standard/pro for production
+    region: oregon
+    # Backup retention (pro plan only)
+    # backupRetentionDays: 7
