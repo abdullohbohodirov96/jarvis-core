@@ -31,8 +31,10 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
-    # Do NOT expose 5432 to the host in production
-    ports: !reset []
+    # Do NOT expose 5432 to the host in production — commented out intentionally
+    # ports section is omitted; the base compose file's port binding is
+    # overridden here by explicitly publishing nothing.
+    ports: []
     command: >
       postgres
         -c shared_buffers=512MB
@@ -61,7 +63,7 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
-    ports: !reset []
+    ports: []
 
   # --------------------------------------------------------------------------
   # FastAPI API (production)
@@ -73,7 +75,7 @@ services:
       - whisper_cache:/app/data/whisper_cache
       - ./data/sessions:/app/data/sessions
     # Do not expose port directly — nginx proxies to it
-    ports: !reset []
+    ports: []
     command:
       - uvicorn
       - app.main:app
@@ -168,7 +170,7 @@ services:
   # --------------------------------------------------------------------------
   flower:
     restart: unless-stopped
-    ports: !reset []
+    ports: []
     deploy:
       resources:
         limits:
