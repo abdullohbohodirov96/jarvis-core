@@ -1,0 +1,259 @@
+# =============================================================================
+# JARVIS AI Assistant — Docker Compose (development)
+# =============================================================================
+#
+# Usage:
+#   docker-compose up --build          # Start everything
+#   docker-compose up -d               # Detached mode
+#   docker-compose logs -f api         # Tail API logs
+#   docker-compose exec api bash       # Shell into API container
+#   docker-compose down -v             # Stop and remove volumes
+#
+# The API source is bind-mounted for hot reload in development.
+# =============================================================================
+
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Named volumes
+# ---------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  whisper_cache:
+    driver: local
+  celery_beat_schedule:
+    driver: local
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  jarvis_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ---------------------------------------------------------------------------
+# Common fragments (YAML anchors)
+# ---------------------------------------------------------------------------
+x-backend-common: &backend-common
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+    target: production
+  env_file:
+    - .env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - jarvis_network
+  restart: unless-stopped
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+services:
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL 16
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: jarvis_postgres
+    environment:
+      POSTGRES_DB: jarvisdb
+      POSTGRES_USER: jarvis
+      POSTGRES_PASSWORD: jarvispassword
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - jarvis_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis -d jarvisdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c work_mem=16MB
+        -c maintenance_work_mem=128MB
+        -c effective_cache_size=1GB
+        -c wal_level=replica
+        -c max_wal_senders=3
+        -c log_min_duration_statement=1000
+        -c log_line_prefix='%t [%p]: [%l-1] db=%d,user=%u '
+        -c timezone=UTC
+    labels:
+      com.jarvis.service: "database"
+      com.jarvis.environment: "development"
+
+  # --------------------------------------------------------------------------
+  # Redis 7
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: jarvis_redis
+    command: >
+      redis-server
+        --appendonly yes
+        --appendfilename appendonly.aof
+        --appendfsync everysec
+        --no-appendfsync-on-rewrite no
+        --auto-aof-rewrite-percentage 100
+        --auto-aof-rewrite-min-size 64mb
+        --maxmemory 512mb
+        --maxmemory-policy allkeys-lru
+        --tcp-keepalive 60
+        --loglevel notice
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - jarvis_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    labels:
+      com.jarvis.service: "cache-broker"
+      com.jarvis.environment: "development"
+
+  # --------------------------------------------------------------------------
+  # FastAPI application (development — hot-reload via bind mount)
+  # --------------------------------------------------------------------------
+  api:
+    <<: *backend-common
+    container_name: jarvis_api
+    volumes:
+      # Bind-mount source for hot reload; remove in production
+      - ./backend:/app:delegated
+      # Persist Whisper model cache between restarts
+      - whisper_cache:/app/data/whisper_cache
+      # Persist Telegram session files
+      - ./data/sessions:/app/data/sessions
+    ports:
+      - "8000:8000"
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/app
+      - --log-level
+      - info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    labels:
+      com.jarvis.service: "api"
+      com.jarvis.environment: "development"
+
+  # --------------------------------------------------------------------------
+  # Celery worker (processes async tasks)
+  # --------------------------------------------------------------------------
+  celery_worker:
+    <<: *backend-common
+    container_name: jarvis_celery_worker
+    volumes:
+      - whisper_cache:/app/data/whisper_cache
+      - ./data/sessions:/app/data/sessions
+    command:
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=4
+      - -Q
+      - default,reminders,ai_tasks,voice_tasks,telegram_tasks
+      - --hostname=worker@%h
+      - --max-tasks-per-child=1000
+      - --prefetch-multiplier=1
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$${HOSTNAME} || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
+    labels:
+      com.jarvis.service: "celery-worker"
+      com.jarvis.environment: "development"
+
+  # --------------------------------------------------------------------------
+  # Celery beat (periodic task scheduler)
+  # --------------------------------------------------------------------------
+  celery_beat:
+    <<: *backend-common
+    container_name: jarvis_celery_beat
+    volumes:
+      - celery_beat_schedule:/app/data/beat
+    command:
+      - celery
+      - -A
+      - app.workers.celery_app
+      - beat
+      - --loglevel=info
+      - --scheduler
+      - celery.beat:PersistentScheduler
+      - --schedule
+      - /app/data/beat/celerybeat-schedule
+    labels:
+      com.jarvis.service: "celery-beat"
+      com.jarvis.environment: "development"
+
+  # --------------------------------------------------------------------------
+  # Flower (Celery monitoring UI)
+  # --------------------------------------------------------------------------
+  flower:
+    <<: *backend-common
+    container_name: jarvis_flower
+    depends_on:
+      redis:
+        condition: service_healthy
+    command:
+      - celery
+      - -A
+      - app.workers.celery_app
+      - flower
+      - --port=5555
+      - --broker_api=redis://redis:6379/1
+      - --url_prefix=flower
+      - --basic_auth=admin:flowerpassword
+    ports:
+      - "5555:5555"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/flower/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      com.jarvis.service: "flower"
+      com.jarvis.environment: "development"

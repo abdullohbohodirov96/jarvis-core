@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite3
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Telegram sessions
+data/sessions/
+*.session
+*.session-journal
+
+# Audio files
+*.wav
+*.mp3
+*.ogg
+*.m4a
+data/audio/
+
+# Docker
+.docker/
+
+# Secrets (never commit real .env)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Alembic
+alembic/versions/*.py
+!alembic/versions/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db

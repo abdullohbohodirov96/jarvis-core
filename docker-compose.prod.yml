@@ -1,0 +1,229 @@
+# =============================================================================
+# JARVIS AI Assistant — Docker Compose production override
+# =============================================================================
+#
+# Merges with base docker-compose.yml:
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Key differences from development:
+#   - No bind-mounted source (immutable image)
+#   - Resource limits on every service
+#   - More Celery concurrency
+#   - Nginx reverse proxy (TLS termination handled externally)
+#   - Internal ports not exposed directly (nginx fronts everything)
+#   - Restart policies enforce high availability
+# =============================================================================
+
+version: "3.9"
+
+services:
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL (production tuning)
+  # --------------------------------------------------------------------------
+  postgres:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    # Do NOT expose 5432 to the host in production
+    ports: !reset []
+    command: >
+      postgres
+        -c shared_buffers=512MB
+        -c work_mem=32MB
+        -c maintenance_work_mem=256MB
+        -c effective_cache_size=2GB
+        -c max_connections=200
+        -c wal_level=replica
+        -c max_wal_senders=3
+        -c checkpoint_completion_target=0.9
+        -c random_page_cost=1.1
+        -c log_min_duration_statement=500
+        -c log_line_prefix='%t [%p]: [%l-1] db=%d,user=%u '
+        -c timezone=UTC
+
+  # --------------------------------------------------------------------------
+  # Redis (production)
+  # --------------------------------------------------------------------------
+  redis:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    ports: !reset []
+
+  # --------------------------------------------------------------------------
+  # FastAPI API (production)
+  # --------------------------------------------------------------------------
+  api:
+    restart: unless-stopped
+    # Remove dev bind-mount; use the built image only
+    volumes:
+      - whisper_cache:/app/data/whisper_cache
+      - ./data/sessions:/app/data/sessions
+    # Do not expose port directly — nginx proxies to it
+    ports: !reset []
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --workers
+      - "2"
+      - --loop
+      - uvloop
+      - --http
+      - httptools
+      - --log-level
+      - info
+      - --access-log
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      LOG_FORMAT: json
+    labels:
+      com.jarvis.environment: "production"
+
+  # --------------------------------------------------------------------------
+  # Celery worker (production — more concurrency)
+  # --------------------------------------------------------------------------
+  celery_worker:
+    restart: unless-stopped
+    volumes:
+      - whisper_cache:/app/data/whisper_cache
+      - ./data/sessions:/app/data/sessions
+    command:
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=8
+      - -Q
+      - default,reminders,ai_tasks,voice_tasks,telegram_tasks
+      - --hostname=worker@%h
+      - --max-tasks-per-child=500
+      - --prefetch-multiplier=1
+      - --without-gossip
+      - --without-mingle
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    environment:
+      ENVIRONMENT: production
+      LOG_FORMAT: json
+    labels:
+      com.jarvis.environment: "production"
+
+  # --------------------------------------------------------------------------
+  # Celery beat (production)
+  # --------------------------------------------------------------------------
+  celery_beat:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+    environment:
+      ENVIRONMENT: production
+      LOG_FORMAT: json
+    labels:
+      com.jarvis.environment: "production"
+
+  # --------------------------------------------------------------------------
+  # Flower (production — behind nginx, not exposed directly)
+  # --------------------------------------------------------------------------
+  flower:
+    restart: unless-stopped
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+    environment:
+      ENVIRONMENT: production
+    labels:
+      com.jarvis.environment: "production"
+
+  # --------------------------------------------------------------------------
+  # Nginx reverse proxy (production only)
+  # --------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: jarvis_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      # TLS certificates — populate before starting
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      # Frontend static build output (optional)
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - jarvis_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+    labels:
+      com.jarvis.service: "nginx"
+      com.jarvis.environment: "production"
+
+# Additional volume for nginx logs
+volumes:
+  nginx_logs:
+    driver: local
