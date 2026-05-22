@@ -1,0 +1,66 @@
+# =============================================================================
+# JARVIS Desktop AI Assistant — Python Dependencies
+#
+# Install:  pip install -r requirements.txt
+#
+# Python >= 3.11 required.
+# On Linux you also need OS packages:
+#   sudo apt-get install ffmpeg portaudio19-dev libsndfile1 libgl1
+# =============================================================================
+
+# ── Core web framework ────────────────────────────────────────────────────────
+fastapi==0.110.0
+uvicorn[standard]==0.28.0
+pydantic==2.6.4
+pydantic-settings==2.2.1
+python-dotenv==1.0.1
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.28
+aiosqlite==0.20.0
+
+# ── OpenAI / AI ───────────────────────────────────────────────────────────────
+openai==1.57.2
+tiktoken==0.8.0
+
+# ── Voice / Audio ─────────────────────────────────────────────────────────────
+# Whisper: local on-device speech recognition
+openai-whisper==20240930
+
+# Microsoft Edge TTS (free, no API key required)
+edge-tts==6.1.12
+
+# Microphone capture
+sounddevice==0.5.1
+
+# Audio processing
+scipy==1.14.1
+numpy==2.1.3
+soundfile==0.12.1
+
+# PyAudio is required by some audio backends.
+# On Linux: sudo apt-get install portaudio19-dev before pip install
+pyaudio==0.2.14
+
+# ── Telegram ─────────────────────────────────────────────────────────────────
+# Telethon userbot — does NOT require a bot token; logs in as a real account
+telethon==1.34.0
+
+# ── Desktop Automation ───────────────────────────────────────────────────────
+# PyAutoGUI for mouse/keyboard/screenshot control
+pyautogui==0.9.54
+
+# Pillow is required by PyAutoGUI for screenshot support
+Pillow==11.1.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+loguru==0.7.2
+httpx==0.28.1
+aiofiles==24.1.0
+python-dateutil==2.9.0.post0
+
+# ── Optional: wake word detection ────────────────────────────────────────────
+# Uncomment to use OpenWakeWord for a dedicated, CPU-efficient wake-word engine
+# instead of the built-in Whisper-based detector.
+# Requires: pip install openwakeword==0.6.0
+# openwakeword==0.6.0

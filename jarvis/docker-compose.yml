@@ -1,0 +1,92 @@
+# =============================================================================
+# JARVIS Desktop AI Assistant — Docker Compose
+#
+# Usage
+# -----
+#   1. cd jarvis/
+#   2. cp .env.example .env      # fill in OPENAI_API_KEY etc.
+#   3. docker compose up --build
+#
+# This file runs JARVIS in API-only mode (no microphone, suitable for Docker).
+#
+# Voice / wake-word mode
+# ----------------------
+# Docker containers cannot access the host microphone by default.
+# To enable voice on Linux you can either:
+#   a) Run JARVIS directly on the host: python main.py
+#   b) Use host networking + pass /dev/snd:
+#
+#      services:
+#        jarvis:
+#          network_mode: host
+#          devices:
+#            - /dev/snd:/dev/snd
+#          command: ["python", "main.py"]
+#
+# See README.md § Voice Setup for full details.
+# =============================================================================
+
+version: "3.9"
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # JARVIS core service
+  # ---------------------------------------------------------------------------
+  jarvis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jarvis-core:latest
+    container_name: jarvis
+
+    # Load all settings from the .env file sitting next to this compose file.
+    env_file:
+      - .env
+
+    ports:
+      # REST API — map host:8765 → container:8765
+      # Access at http://localhost:8765
+      - "8765:8765"
+
+    volumes:
+      # Persist the SQLite database between container restarts.
+      - jarvis_db:/app/jarvis.db
+
+      # Persist screenshot output.
+      - jarvis_screenshots:/tmp/jarvis_screenshots
+
+      # Persist Telegram session file so re-authentication is not needed on
+      # every restart.  The file is written to /tmp/jarvis_telegram.session
+      # inside the container.
+      - jarvis_telegram_session:/tmp
+
+    # Restart the container automatically unless explicitly stopped.
+    restart: unless-stopped
+
+    # Health check — polls the /api/health endpoint.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8765/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+    # Default: API-only (no voice).
+    # Override with: docker compose run jarvis python main.py --no-voice
+    command: ["python", "main.py", "--no-voice", "--api-only"]
+
+
+# =============================================================================
+# Named volumes
+# =============================================================================
+volumes:
+  jarvis_db:
+    driver: local
+
+  jarvis_screenshots:
+    driver: local
+
+  jarvis_telegram_session:
+    driver: local
