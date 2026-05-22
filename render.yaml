@@ -27,8 +27,6 @@ services:
     plan: starter
     region: oregon
 
-    rootDir: nexus
-
     runtime: python
     pythonVersion: "3.11.9"
 
@@ -36,7 +34,7 @@ services:
       pip install --upgrade pip && \
       pip install -r requirements.txt
 
-    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT --workers 1 --loop uvloop
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --loop uvloop
 
     healthCheckPath: /health
 
