@@ -35,8 +35,9 @@ class TelegramAutomator:
 
     def __init__(self, brain: NexusBrain) -> None:
         self._brain = brain
+        # Use /tmp so the session file is always writable on any host
         self._client = TelegramClient(
-            session="nexus_bot_session",
+            session="/tmp/nexus_bot_session",
             api_id=settings.TELEGRAM_API_ID,
             api_hash=settings.TELEGRAM_API_HASH,
         )

@@ -1,15 +1,10 @@
 import sys
+import os
 from loguru import logger as _loguru_logger
 from core.config import settings
 
 
 def _build_format(record: dict) -> str:
-    """
-    Build a colored, human-readable log format string.
-
-    Format:
-        2024-01-01 12:00:00.000 | INFO     | module:function:42 - message
-    """
     level_colors = {
         "TRACE": "<cyan>",
         "DEBUG": "<blue>",
@@ -21,7 +16,6 @@ def _build_format(record: dict) -> str:
     }
     level_name: str = record["level"].name
     color = level_colors.get(level_name, "<white>")
-
     fmt = (
         "<dim>{time:YYYY-MM-DD HH:mm:ss.SSS}</dim> | "
         f"{color}{{level: <8}}</> | "
@@ -34,10 +28,6 @@ def _build_format(record: dict) -> str:
 
 
 def configure_logging() -> None:
-    """
-    Remove default loguru sink and install a clean colored console sink
-    whose minimum level is controlled by settings.LOG_LEVEL.
-    """
     _loguru_logger.remove()
 
     _loguru_logger.add(
@@ -51,17 +41,23 @@ def configure_logging() -> None:
     )
 
     if settings.is_production:
-        _loguru_logger.add(
-            "logs/nexus.log",
-            level="WARNING",
-            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
-            rotation="10 MB",
-            retention="14 days",
-            compression="gz",
-            backtrace=False,
-            diagnose=False,
-            enqueue=True,
-        )
+        # Use /tmp so it always exists on any host (Render, Railway, Fly, etc.)
+        log_path = "/tmp/nexus.log"
+        try:
+            _loguru_logger.add(
+                log_path,
+                level="WARNING",
+                format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+                rotation="10 MB",
+                retention="14 days",
+                compression="gz",
+                backtrace=False,
+                diagnose=False,
+                enqueue=True,
+            )
+        except Exception as exc:
+            # Never crash the app over a logging misconfiguration
+            _loguru_logger.warning("Could not add file log sink ({}): {}", log_path, exc)
 
 
 configure_logging()
