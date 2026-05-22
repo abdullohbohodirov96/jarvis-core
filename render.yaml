@@ -19,6 +19,52 @@ version: "1"
 services:
 
   # ---------------------------------------------------------------------------
+  # NEXUS — Personal AI assistant (FastAPI + Telethon + OpenAI)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: nexus-api
+    env: python
+    plan: starter
+    region: oregon
+
+    rootDir: nexus
+
+    runtime: python
+    pythonVersion: "3.11"
+
+    buildCommand: |
+      pip install --upgrade pip && \
+      pip install -r requirements.txt
+
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT --workers 1 --loop uvloop
+
+    healthCheckPath: /health
+
+    autoDeploy: true
+
+    envVars:
+      - key: PROJECT_NAME
+        value: NEXUS-Core
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nexus-postgres
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TARGET_CHAT_ID
+        sync: false
+
+  # ---------------------------------------------------------------------------
   # FastAPI web service (API)
   # ---------------------------------------------------------------------------
   - type: web
@@ -276,6 +322,12 @@ services:
 # Managed PostgreSQL database
 # ---------------------------------------------------------------------------
 databases:
+  - name: nexus-postgres
+    databaseName: nexusdb
+    user: nexus
+    plan: starter
+    region: oregon
+
   - name: jarvis-postgres
     databaseName: jarvisdb
     user: jarvis

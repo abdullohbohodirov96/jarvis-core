@@ -1,0 +1,12 @@
+# Root-level requirements for NEXUS (nexus/ directory).
+# Render uses this file when no rootDir override is active.
+# The canonical file is nexus/requirements.txt.
+fastapi==0.110.0
+uvicorn[standard]==0.28.0
+pydantic-settings==2.2.1
+sqlalchemy[asyncio]==2.0.28
+asyncpg==0.29.0
+telethon==1.34.0
+openai==1.14.1
+loguru==0.7.2
+python-dotenv==1.0.1
