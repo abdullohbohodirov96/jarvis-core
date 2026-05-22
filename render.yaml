@@ -30,7 +30,7 @@ services:
     rootDir: nexus
 
     runtime: python
-    pythonVersion: "3.11"
+    pythonVersion: "3.11.9"
 
     buildCommand: |
       pip install --upgrade pip && \
