@@ -17,6 +17,14 @@ const state = {
     recordingTimer: null,
     recordingSeconds: 0,
 
+    // Siri Real-time Voice Mode
+    siriModeActive: false,
+    siriRecognition: null,
+    siriActiveRecognition: null,
+    siriStatus: 'idle', // 'idle', 'listening_wake_word', 'listening_command', 'processing', 'speaking'
+    siriAudio: null,
+    siriTextToSpeak: '',
+
     // Telegram
     telegramConnected: false,
     chats: [],
@@ -50,6 +58,13 @@ const DOM = {
     voiceStatusBar: document.getElementById('voice-status-bar'),
     voiceStatusText: document.getElementById('voice-status-text'),
     voiceTimer: document.getElementById('voice-timer'),
+
+    // Siri Real-time elements
+    siriToggleBtn: document.getElementById('siri-toggle-btn'),
+    voiceOverlay: document.getElementById('voice-overlay'),
+    voiceOverlayStatus: document.getElementById('voice-overlay-status'),
+    voiceOverlaySub: document.getElementById('voice-overlay-sub'),
+    voiceCloseBtn: document.getElementById('voice-close-btn'),
 
     // Telegram UI
     tgChatsList: document.getElementById('tg-chats-list'),
@@ -169,11 +184,22 @@ function connectWebSocket() {
         const data = JSON.parse(event.data);
         if (data.type === 'token') {
             appendOrUpdateBotMessage(data.content);
+            if (state.siriModeActive) {
+                state.siriTextToSpeak += data.content;
+            }
         } else if (data.type === 'done') {
             finalizeBotMessage();
+            if (state.siriModeActive) {
+                speakSiriResponse(state.siriTextToSpeak);
+                state.siriTextToSpeak = '';
+            }
         } else if (data.type === 'error') {
             showToast(data.message, 'error');
             finalizeBotMessage(true);
+            if (state.siriModeActive) {
+                speakSiriResponse("Xatolik yuz berdi, xo'jayin.");
+                state.siriTextToSpeak = '';
+            }
         }
     };
 
@@ -811,6 +837,14 @@ function setupEvents() {
     });
     DOM.voiceRecordBtn.addEventListener('click', toggleVoiceRecording);
 
+    // Siri Toggle Actions
+    if (DOM.siriToggleBtn) {
+        DOM.siriToggleBtn.addEventListener('click', toggleSiriMode);
+    }
+    if (DOM.voiceCloseBtn) {
+        DOM.voiceCloseBtn.addEventListener('click', disableSiriMode);
+    }
+
     // Telegram UI
     DOM.tgSendBtn.addEventListener('click', sendTelegramMessage);
     DOM.tgMessageInput.addEventListener('keydown', (e) => {
@@ -834,6 +868,289 @@ function setupEvents() {
     DOM.settingsForm.addEventListener('submit', saveTelegramSettings);
     DOM.authSendCodeBtn.addEventListener('click', sendTelegramAuthCode);
     DOM.authVerifyCodeBtn.addEventListener('click', verifyTelegramAuthCode);
+}
+
+// =============================================================================
+// Siri Real-time Voice Mode Implementation
+// =============================================================================
+
+function toggleSiriMode() {
+    if (state.siriModeActive) {
+        disableSiriMode();
+    } else {
+        enableSiriMode();
+    }
+}
+
+function enableSiriMode() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        showToast("Sizning brauzeringizda ovozni aniqlash tizimi (SpeechRecognition) qo'llab-quvvatlanmaydi.", "error");
+        return;
+    }
+
+    state.siriModeActive = true;
+    DOM.siriToggleBtn.classList.add('active');
+    DOM.siriToggleBtn.querySelector('span').innerText = "Siri YOQILGAN";
+    DOM.voiceOverlay.classList.remove('hidden');
+    
+    if (state.isRecording) {
+        stopVoiceRecording();
+    }
+
+    switchTab('chat');
+    setSiriVisualState('listening_wake_word');
+    startSiriWakeWordListening();
+    showToast("Siri Rejimi faollashtirildi. 'JARVIS' deb chaqiring.", "success");
+}
+
+function disableSiriMode() {
+    state.siriModeActive = false;
+    DOM.siriToggleBtn.classList.remove('active');
+    DOM.siriToggleBtn.querySelector('span').innerText = "Siri Rejimi";
+    DOM.voiceOverlay.classList.add('hidden');
+
+    stopSiriWakeWordListening();
+    if (state.siriActiveRecognition) {
+        try { state.siriActiveRecognition.stop(); } catch(e){}
+        state.siriActiveRecognition = null;
+    }
+    
+    window.speechSynthesis.cancel();
+    if (state.siriAudio) {
+        state.siriAudio.pause();
+        state.siriAudio = null;
+    }
+    
+    state.siriStatus = 'idle';
+    showToast("Siri Rejimi o'chirildi.", "info");
+}
+
+function setSiriVisualState(status) {
+    state.siriStatus = status;
+    DOM.voiceOverlay.classList.remove('listening', 'processing', 'speaking');
+    
+    if (status === 'listening_wake_word') {
+        DOM.voiceOverlayStatus.innerText = "JARVIS disangiz faollashadi";
+        DOM.voiceOverlaySub.innerText = 'Eshitmoqda...';
+        DOM.voiceOverlay.classList.add('listening');
+    } else if (status === 'listening_command') {
+        DOM.voiceOverlayStatus.innerText = "Sizni eshitmoqdaman...";
+        DOM.voiceOverlaySub.innerText = "Buyruq berishingiz mumkin";
+        DOM.voiceOverlay.classList.add('listening');
+    } else if (status === 'processing') {
+        DOM.voiceOverlayStatus.innerText = "JARVIS o'ylamoqda...";
+        DOM.voiceOverlaySub.innerText = "Iltimos kuting...";
+        DOM.voiceOverlay.classList.add('processing');
+    } else if (status === 'speaking') {
+        DOM.voiceOverlayStatus.innerText = "JARVIS javob bermoqda";
+        DOM.voiceOverlay.classList.add('speaking');
+    }
+}
+
+function startSiriWakeWordListening() {
+    if (!state.siriModeActive) return;
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    state.siriRecognition = new SpeechRecognition();
+    state.siriRecognition.continuous = true;
+    state.siriRecognition.interimResults = true;
+    state.siriRecognition.lang = 'uz-UZ';
+
+    state.siriRecognition.onresult = (event) => {
+        if (state.siriStatus !== 'listening_wake_word') return;
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript.toLowerCase();
+            console.log("Wake word candidate transcript:", transcript);
+            
+            if (transcript.includes('jarvis') || 
+                transcript.includes('jarves') || 
+                transcript.includes('jorvis') || 
+                transcript.includes('жарвис') || 
+                transcript.includes('yarvis') ||
+                transcript.includes('charvis') ||
+                transcript.includes('javob ber')) {
+                
+                console.log("JARVIS hotword detected!");
+                triggerJarvisActivation();
+                break;
+            }
+        }
+    };
+
+    state.siriRecognition.onend = () => {
+        if (state.siriModeActive && state.siriStatus === 'listening_wake_word') {
+            try { state.siriRecognition.start(); } catch(e){}
+        }
+    };
+
+    try {
+        state.siriRecognition.start();
+    } catch(e) {
+        console.error("Failed to start wake-word recognition:", e);
+    }
+}
+
+function stopSiriWakeWordListening() {
+    if (state.siriRecognition) {
+        try {
+            state.siriRecognition.onend = null;
+            state.siriRecognition.stop();
+        } catch(e){}
+        state.siriRecognition = null;
+    }
+}
+
+function triggerJarvisActivation() {
+    stopSiriWakeWordListening();
+    speakUtterance("Ha, xo'jayin!", () => {
+        startSiriCommandListening();
+    });
+}
+
+function startSiriCommandListening() {
+    setSiriVisualState('listening_command');
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const commandRec = new SpeechRecognition();
+    commandRec.continuous = false;
+    commandRec.interimResults = true;
+    commandRec.lang = 'uz-UZ';
+    
+    state.siriActiveRecognition = commandRec;
+
+    commandRec.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+
+        DOM.voiceOverlaySub.innerText = interimTranscript || finalTranscript || "Buyruq kutilmoqda...";
+    };
+
+    commandRec.onend = () => {
+        state.siriActiveRecognition = null;
+        const commandText = DOM.voiceOverlaySub.innerText.trim();
+        
+        if (commandText && commandText !== "Buyruq kutilmoqda..." && commandText !== "Buyruq berishingiz mumkin") {
+            handleSiriCommand(commandText);
+        } else {
+            setSiriVisualState('listening_wake_word');
+            startSiriWakeWordListening();
+        }
+    };
+
+    try {
+        commandRec.start();
+    } catch(e) {
+        console.error("Failed to start command recognition:", e);
+        setSiriVisualState('listening_wake_word');
+        startSiriWakeWordListening();
+    }
+}
+
+function handleSiriCommand(text) {
+    setSiriVisualState('processing');
+    appendUserMessage(text);
+    
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.siriTextToSpeak = '';
+        state.ws.send(JSON.stringify({
+            message: text,
+            conversation_id: state.conversationId
+        }));
+    } else {
+        showToast('Tizim bilan bog\'lanish uzilgan. Qayta ulanmoqda.', 'error');
+        setSiriVisualState('listening_wake_word');
+        startSiriWakeWordListening();
+    }
+}
+
+function speakUtterance(text, callback) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    let selectedVoice = voices.find(v => v.lang.includes('uz')) ||
+                        voices.find(v => v.lang.includes('tr')) ||
+                        voices.find(v => v.lang.includes('ru')) ||
+                        voices[0];
+    
+    if (selectedVoice) {
+        utterance.voice = selectedVoice;
+    }
+    
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    
+    utterance.onend = () => {
+        if (callback) callback();
+    };
+    
+    utterance.onerror = (e) => {
+        console.error("Utterance speech error:", e);
+        if (callback) callback();
+    };
+    
+    window.speechSynthesis.speak(utterance);
+}
+
+async function speakSiriResponse(text) {
+    if (!text) {
+        setSiriVisualState('listening_wake_word');
+        startSiriWakeWordListening();
+        return;
+    }
+    
+    setSiriVisualState('speaking');
+    DOM.voiceOverlaySub.innerText = text.length > 120 ? text.substring(0, 120) + "..." : text;
+    
+    try {
+        const response = await fetch('/api/v1/voice/synthesize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+        });
+        
+        if (response.ok) {
+            const contentLength = parseInt(response.headers.get('Content-Length') || '0');
+            if (contentLength > 44) {
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                
+                if (state.siriAudio) {
+                    state.siriAudio.pause();
+                }
+                
+                state.siriAudio = new Audio(audioUrl);
+                state.siriAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    state.siriAudio = null;
+                    onSiriSpeechFinished();
+                };
+                
+                state.siriAudio.play();
+                return;
+            }
+        }
+    } catch(err) {
+        console.error("Backend synthesis failed, falling back to local TTS:", err);
+    }
+    
+    speakUtterance(text, () => {
+        onSiriSpeechFinished();
+    });
+}
+
+function onSiriSpeechFinished() {
+    setSiriVisualState('listening_wake_word');
+    startSiriWakeWordListening();
 }
 
 // System Status Checks (Database & General API availability)

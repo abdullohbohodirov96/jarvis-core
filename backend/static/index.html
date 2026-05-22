@@ -78,6 +78,9 @@
                     <p id="current-tab-subtitle">JARVIS bilan matn va ovoz orqali muloqot qiling</p>
                 </div>
                 <div class="user-profile">
+                    <button class="siri-toggle-btn" id="siri-toggle-btn" title="Siri/Voice Rejimi">
+                        <i class="fa-solid fa-microphone-lines"></i> <span>Siri Rejimi</span>
+                    </button>
                     <div class="network-latency" id="network-latency">
                         <i class="fa-solid fa-signal"></i> <span>-- ms</span>
                     </div>
@@ -269,6 +272,39 @@
 
     <!-- Notification Toast -->
     <div id="toast-container" class="toast-container"></div>
+
+    <!-- JARVIS Siri Voice Overlay -->
+    <div class="jarvis-voice-overlay hidden" id="voice-overlay">
+        <div class="voice-backdrop"></div>
+        <div class="voice-modal">
+            <div class="voice-glow-container">
+                <div class="voice-ring ring-1"></div>
+                <div class="voice-ring ring-2"></div>
+                <div class="voice-ring ring-3"></div>
+                <div class="voice-sphere" id="voice-sphere">
+                    <div class="core-pulsar"></div>
+                </div>
+            </div>
+            
+            <div class="voice-wave-visualizer" id="voice-wave-visualizer">
+                <div class="wave-bar bar-1"></div>
+                <div class="wave-bar bar-2"></div>
+                <div class="wave-bar bar-3"></div>
+                <div class="wave-bar bar-4"></div>
+                <div class="wave-bar bar-5"></div>
+                <div class="wave-bar bar-6"></div>
+                <div class="wave-bar bar-7"></div>
+                <div class="wave-bar bar-8"></div>
+            </div>
+            
+            <h3 id="voice-overlay-status">Siri Rejimi: Faollashish kutilmoqda</h3>
+            <p id="voice-overlay-sub">"JARVIS" deb chaqiring yoki gapirishni boshlang</p>
+            
+            <button class="voice-close-btn" id="voice-close-btn">
+                <i class="fa-solid fa-power-off"></i> Rejimni yopish
+            </button>
+        </div>
+    </div>
 
     <!-- Custom App Javascript -->
     <script src="/static/app.js"></script>
