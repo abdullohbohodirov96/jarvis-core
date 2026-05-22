@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
-JARVIS Desktop GUI — O'zbek tilidagi AI yordamchi
-==================================================
+JARVIS — O'zbek tilidagi AI Yordamchi
+======================================
 Ishga tushirish:  python jarvis/desktop_app.py
+
+Kerakli paketlar:
+    pip install customtkinter openai sounddevice scipy edge-tts
+    # Linux:  sudo apt-get install python3-tk libportaudio2
+    # Mac:    brew install portaudio
 """
 
 from __future__ import annotations
@@ -10,567 +15,601 @@ from __future__ import annotations
 import asyncio
 import io
 import os
+import subprocess
 import sys
 import tempfile
 import threading
 import wave
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
-import customtkinter as ctk
+# ── customtkinter ─────────────────────────────────────────────────────────────
+try:
+    import customtkinter as ctk
+except ImportError:
+    print("Xato: pip install customtkinter")
+    sys.exit(1)
 
-# jarvis/ papkasini sys.path ga qo'shamiz
-_ROOT = Path(__file__).parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-
-# ── Ranglar ──────────────────────────────────────────────────────────────────
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-C_BG       = "#0d0d0d"
-C_SIDEBAR  = "#111111"
-C_SURFACE  = "#1c1c1c"
-C_BORDER   = "#2a2a2a"
-C_ACCENT   = "#3b82f6"
-C_ACC_HV   = "#2563eb"
-C_USER_BG  = "#1e3a5f"
-C_BOT_BG   = "#1a1a2e"
-C_TASK_BG  = "#182018"
-C_TEXT     = "#e2e8f0"
-C_MUTED    = "#64748b"
-C_GREEN    = "#22c55e"
-C_RED      = "#ef4444"
-C_YELLOW   = "#eab308"
-C_MIC_ACT  = "#dc2626"   # mikrofon yoqilganda qizil
+# ── Ranglar ───────────────────────────────────────────────────────────────────
+BG        = "#111318"
+SIDEBAR   = "#0d0f14"
+SURFACE   = "#1c2028"
+BORDER    = "#2a2f3a"
+ACCENT    = "#4f8ef7"
+ACC_HV    = "#3b7de8"
+USER_BG   = "#1a3050"
+BOT_BG    = "#151a2e"
+TEXT      = "#dde3f0"
+MUTED     = "#5a6480"
+GREEN     = "#34d399"
+RED       = "#f87171"
+YELLOW    = "#fbbf24"
+MIC_ON    = "#dc2626"
 
-# ── Tizim prompt — o'zbek tilida ─────────────────────────────────────────────
-SYSTEM_PROMPT_UZ = """Sen JARVIS — foydalanuvchining shaxsiy AI yordamchisissan.
+# ── Tizim prompt ──────────────────────────────────────────────────────────────
+SYSTEM = """Sen JARVIS — foydalanuvchining shaxsiy O'zbek AI yordamchisissan.
 
-Qoidalar:
-- Har doim O'ZBEK TILIDA javob ber.
-- Qisqa, aniq va do'stona gapir.
-- Vazifa qo'shish/ko'rish so'ralsa, JSON formatida quyidagicha qaytargin:
-  {"action": "add_task", "title": "...", "priority": "yuqori|o'rta|past"}
-  {"action": "list_tasks"}
-- Salomlashganda foydalanuvchini ismi bilan murojaat qil.
-- Texnik narsalar haqida so'ralsa tushuntirish berishdan tortinma."""
+MUHIM QOIDALAR:
+- FAQAT O'ZBEK TILIDA gapir. Hech qachon boshqa tilda javob berma.
+- Qisqa, aniq, do'stona va ishonchli gapir.
+- "Siz" deb murojaat qil.
+- Vazifa qo'shish so'ralsa: {"action":"vazifa","sarlavha":"...","muhimlik":"yuqori/o'rta/past"}
+- Vazifalarni ko'rish so'ralsa: {"action":"vazifalar_korsatish"}
+
+Misol javoblar:
+  Foydalanuvchi: "Salom"
+  JARVIS: "Salom! Men JARVIS, sizning yordamchingizman. Bugun qanday yordam kerak?"
+
+  Foydalanuvchi: "Ertaga uchrashuv bor"
+  JARVIS: "Tushundim! Uchrashuv vazifasini qo'shaymi? {"action":"vazifa","sarlavha":"Ertaga uchrashuv","muhimlik":"yuqori"}
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Async ko'prik
 # ═══════════════════════════════════════════════════════════════════════════════
-class AsyncHelper:
+class AsyncRunner:
     def __init__(self):
         self._loop = asyncio.new_event_loop()
-        threading.Thread(target=self._loop.run_forever, daemon=True).start()
+        t = threading.Thread(target=self._loop.run_forever, daemon=True)
+        t.start()
 
-    def run(self, coro, callback=None):
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        if callback:
-            future.add_done_callback(callback)
-        return future
+    def run(self, coro, done=None):
+        f = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        if done:
+            f.add_done_callback(done)
+        return f
 
     def stop(self):
         self._loop.call_soon_threadsafe(self._loop.stop)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Ovoz chiqarish — Edge TTS (Uzbek Sardor)
+# ═══════════════════════════════════════════════════════════════════════════════
+async def speak_uz(text: str):
+    """Edge-TTS bilan o'zbek tilida ovoz chiqarish."""
+    try:
+        import edge_tts, tempfile, os, subprocess
+        voice = "uz-UZ-SardorNeural"       # erkak ovoz
+        # voice = "uz-UZ-MadinaNeural"     # ayol ovoz
+
+        tts = edge_tts.Communicate(text, voice)
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            path = f.name
+
+        await tts.save(path)
+
+        # Platformaga qarab mp3 chalish
+        if sys.platform == "darwin":
+            subprocess.Popen(["afplay", path],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif sys.platform == "win32":
+            os.startfile(path)
+        else:
+            subprocess.Popen(["mpg123", "-q", path],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"[TTS xato]: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Xabar bubble
 # ═══════════════════════════════════════════════════════════════════════════════
 class Bubble(ctk.CTkFrame):
-    def __init__(self, parent, role: str, text: str, ts: str, **kw):
-        bg = C_USER_BG if role == "user" else C_BOT_BG
-        super().__init__(parent, fg_color=bg, corner_radius=14, **kw)
+    def __init__(self, parent, role: str, text: str, **kw):
+        bg = USER_BG if role == "user" else BOT_BG
+        super().__init__(parent, fg_color=bg, corner_radius=16, **kw)
 
+        # Sarlavha qatori
         hdr = ctk.CTkFrame(self, fg_color="transparent")
-        hdr.pack(fill="x", padx=12, pady=(8, 0))
+        hdr.pack(fill="x", padx=14, pady=(10, 0))
 
-        ctk.CTkLabel(
-            hdr,
-            text="Siz" if role == "user" else "⬡ JARVIS",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=C_ACCENT if role == "user" else C_GREEN,
-        ).pack(side="left")
+        if role == "user":
+            icon, name, color = "👤", "Siz", ACCENT
+        else:
+            icon, name, color = "🤖", "JARVIS", GREEN
 
-        ctk.CTkLabel(
-            hdr, text=ts,
-            font=ctk.CTkFont(size=10),
-            text_color=C_MUTED,
-        ).pack(side="right")
+        ctk.CTkLabel(hdr, text=f"{icon} {name}",
+                     font=ctk.CTkFont(size=12, weight="bold"),
+                     text_color=color).pack(side="left")
 
-        ctk.CTkLabel(
-            self, text=text,
-            font=ctk.CTkFont(size=13),
-            text_color=C_TEXT,
-            wraplength=520,
-            justify="left",
-            anchor="w",
-        ).pack(fill="x", padx=12, pady=(4, 10))
+        ts = datetime.now().strftime("%H:%M")
+        ctk.CTkLabel(hdr, text=ts,
+                     font=ctk.CTkFont(size=10),
+                     text_color=MUTED).pack(side="right")
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Vazifa kartochkasi
-# ═══════════════════════════════════════════════════════════════════════════════
-class TaskCard(ctk.CTkFrame):
-    PRIORITY_COLOR = {"yuqori": C_RED, "o'rta": C_YELLOW, "past": C_GREEN}
-
-    def __init__(self, parent, task: dict, on_done, **kw):
-        super().__init__(parent, fg_color=C_TASK_BG, corner_radius=8, **kw)
-        self._task = task
-        self._on_done = on_done
-
-        row = ctk.CTkFrame(self, fg_color="transparent")
-        row.pack(fill="x", padx=8, pady=6)
-
-        dot_color = self.PRIORITY_COLOR.get(task.get("priority", "o'rta"), C_YELLOW)
-        ctk.CTkLabel(row, text="●", text_color=dot_color,
-                     font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 6))
-
-        ctk.CTkLabel(
-            row, text=task["title"],
-            font=ctk.CTkFont(size=12),
-            text_color=C_TEXT, anchor="w",
-        ).pack(side="left", fill="x", expand=True)
-
-        ctk.CTkButton(
-            row, text="✓", width=26, height=22,
-            fg_color=C_SURFACE, hover_color=C_GREEN,
-            text_color=C_MUTED,
-            command=self._complete,
-        ).pack(side="right")
-
-    def _complete(self):
-        self._on_done(self._task)
-        self.destroy()
+        # Matn
+        ctk.CTkLabel(self, text=text,
+                     font=ctk.CTkFont(size=14),
+                     text_color=TEXT,
+                     wraplength=500,
+                     justify="left",
+                     anchor="w").pack(fill="x", padx=14, pady=(4, 12))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Asosiy ilova
 # ═══════════════════════════════════════════════════════════════════════════════
-class JarvisApp(ctk.CTk):
+class JARVIS(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("⬡ JARVIS — AI Yordamchi")
-        self.geometry("1000x680")
-        self.minsize(780, 520)
-        self.configure(fg_color=C_BG)
 
-        self._async      = AsyncHelper()
-        self._thinking   = False
-        self._recording  = False
-        self._audio_buf  = []
-        self._sd_stream  = None
+        self.title("JARVIS — O'zbek AI Yordamchi")
+        self.geometry("1050x700")
+        self.minsize(800, 550)
+        self.configure(fg_color=BG)
+
+        self._runner   = AsyncRunner()
+        self._busy     = False
+        self._mic_on   = False
+        self._audio    = []
+        self._stream   = None
         self._tasks: list[dict] = []
-        self._history: list[dict] = []   # conversation history
+        self._history: list[dict] = []
 
-        self._build_ui()
-        self._greet()
+        # UI ni kechiktirib quramiz — macOS bo'sh ekrandan qochish uchun
+        self.after(50, self._build)
 
     # ── UI ────────────────────────────────────────────────────────────────────
-    def _build_ui(self):
-        self.grid_columnconfigure(1, weight=1)
+    def _build(self):
         self.grid_rowconfigure(0, weight=1)
-        self._build_sidebar()
-        self._build_chat()
+        self.grid_columnconfigure(1, weight=1)
+
+        self._sidebar()
+        self._chat_panel()
+
+        # Salomlashish
+        self.after(200, lambda: self._bot_msg(
+            "Assalomu alaykum! Men JARVIS — sizning shaxsiy AI yordamchingizman 🤖\n\n"
+            "Boshlash uchun:\n"
+            "① Chap tomonda OpenAI API kalitni kiriting va «Ulash» bosing\n"
+            "② Yozing yoki 🎤 ni bosib gapiringm\n"
+            "③ JARVIS o'zbekcha javob beradi va ovozda ham aytadi!"
+        ))
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
-    def _build_sidebar(self):
-        sb = ctk.CTkFrame(self, width=220, fg_color=C_SIDEBAR, corner_radius=0)
+    def _sidebar(self):
+        sb = ctk.CTkFrame(self, width=230, fg_color=SIDEBAR, corner_radius=0)
         sb.grid(row=0, column=0, sticky="nsew")
         sb.grid_propagate(False)
-        sb.grid_rowconfigure(5, weight=1)
+        sb.grid_rowconfigure(6, weight=1)
 
         # Logo
-        ctk.CTkLabel(sb, text="⬡  JARVIS",
-                     font=ctk.CTkFont(size=22, weight="bold"),
-                     text_color=C_ACCENT).grid(
-            row=0, column=0, padx=16, pady=(22, 2), sticky="w")
-        ctk.CTkLabel(sb, text="AI Shaxsiy Yordamchi",
-                     font=ctk.CTkFont(size=10), text_color=C_MUTED).grid(
-            row=1, column=0, padx=16, sticky="w")
+        ctk.CTkLabel(sb, text="⬡ JARVIS",
+                     font=ctk.CTkFont(size=24, weight="bold"),
+                     text_color=ACCENT).grid(
+            row=0, padx=18, pady=(24, 2), sticky="w")
+        ctk.CTkLabel(sb, text="O'zbek AI Yordamchi",
+                     font=ctk.CTkFont(size=11), text_color=MUTED).grid(
+            row=1, padx=18, sticky="w")
 
-        sep = ctk.CTkFrame(sb, height=1, fg_color=C_BORDER)
-        sep.grid(row=2, column=0, padx=16, pady=12, sticky="ew")
+        ctk.CTkFrame(sb, height=1, fg_color=BORDER).grid(
+            row=2, padx=18, pady=14, sticky="ew")
 
-        # API kalit
-        keys_frame = ctk.CTkFrame(sb, fg_color="transparent")
-        keys_frame.grid(row=3, column=0, padx=16, sticky="ew")
+        # API blok
+        api_f = ctk.CTkFrame(sb, fg_color="transparent")
+        api_f.grid(row=3, padx=18, sticky="ew")
 
-        ctk.CTkLabel(keys_frame, text="OpenAI API Kalit",
+        ctk.CTkLabel(api_f, text="OpenAI API Kalit",
                      font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=C_MUTED).pack(anchor="w", pady=(0, 4))
+                     text_color=MUTED).pack(anchor="w", pady=(0, 5))
 
-        self._api_entry = ctk.CTkEntry(
-            keys_frame, placeholder_text="sk-…",
-            show="*", height=32,
-            fg_color=C_SURFACE, border_color=C_BORDER, text_color=C_TEXT)
-        self._api_entry.pack(fill="x")
+        self._key_entry = ctk.CTkEntry(
+            api_f, placeholder_text="sk-...", show="*",
+            height=34, fg_color=SURFACE, border_color=BORDER, text_color=TEXT,
+            font=ctk.CTkFont(size=12))
+        self._key_entry.pack(fill="x")
 
-        env_key = os.environ.get("OPENAI_API_KEY", "")
-        if env_key:
-            self._api_entry.insert(0, env_key)
+        env_k = os.environ.get("OPENAI_API_KEY", "")
+        if env_k:
+            self._key_entry.insert(0, env_k)
 
-        ctk.CTkButton(keys_frame, text="Saqlash",
-                      height=30, fg_color=C_ACCENT, hover_color=C_ACC_HV,
-                      command=self._apply_key).pack(fill="x", pady=(6, 0))
+        ctk.CTkButton(api_f, text="Ulash ✓", height=32,
+                      fg_color=ACCENT, hover_color=ACC_HV,
+                      font=ctk.CTkFont(size=12, weight="bold"),
+                      command=self._connect).pack(fill="x", pady=(8, 0))
 
         # Model
-        ctk.CTkLabel(keys_frame, text="Model",
+        ctk.CTkLabel(api_f, text="Model",
                      font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=C_MUTED).pack(anchor="w", pady=(14, 4))
-        self._model_var = ctk.StringVar(value="gpt-4o")
-        ctk.CTkOptionMenu(keys_frame,
+                     text_color=MUTED).pack(anchor="w", pady=(14, 4))
+        self._model = ctk.StringVar(value="gpt-4o")
+        ctk.CTkOptionMenu(api_f,
                           values=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-                          variable=self._model_var,
-                          fg_color=C_SURFACE, button_color=C_ACCENT,
-                          button_hover_color=C_ACC_HV,
-                          dropdown_fg_color=C_SURFACE, text_color=C_TEXT,
-                          ).pack(fill="x")
+                          variable=self._model,
+                          fg_color=SURFACE, button_color=ACCENT,
+                          button_hover_color=ACC_HV,
+                          dropdown_fg_color=SURFACE, text_color=TEXT,
+                          font=ctk.CTkFont(size=12)).pack(fill="x")
 
-        sep2 = ctk.CTkFrame(sb, height=1, fg_color=C_BORDER)
-        sep2.grid(row=4, column=0, padx=16, pady=12, sticky="ew")
+        # Ovoz
+        ctk.CTkLabel(api_f, text="JARVIS ovozi",
+                     font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=MUTED).pack(anchor="w", pady=(14, 4))
+        self._voice_on = ctk.BooleanVar(value=True)
+        ctk.CTkSwitch(api_f, text="Ovoz chiqarsin",
+                      variable=self._voice_on,
+                      oncolor=ACCENT, offcolor=SURFACE,
+                      font=ctk.CTkFont(size=12),
+                      text_color=TEXT).pack(anchor="w")
+
+        ctk.CTkFrame(sb, height=1, fg_color=BORDER).grid(
+            row=4, padx=18, pady=14, sticky="ew")
 
         # Vazifalar
-        task_frame = ctk.CTkFrame(sb, fg_color="transparent")
-        task_frame.grid(row=5, column=0, padx=16, sticky="nsew")
-        task_frame.grid_rowconfigure(1, weight=1)
+        task_f = ctk.CTkFrame(sb, fg_color="transparent")
+        task_f.grid(row=6, padx=18, sticky="nsew")
+        task_f.grid_rowconfigure(1, weight=1)
+        task_f.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(task_frame, text="📋  Vazifalar",
-                     font=ctk.CTkFont(size=12, weight="bold"),
-                     text_color=C_TEXT).grid(row=0, column=0, sticky="w")
+        top = ctk.CTkFrame(task_f, fg_color="transparent")
+        top.grid(row=0, sticky="ew")
 
-        self._task_scroll = ctk.CTkScrollableFrame(
-            task_frame, fg_color="transparent",
-            scrollbar_button_color=C_BORDER)
-        self._task_scroll.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
-        task_frame.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(top, text="📋 Vazifalar",
+                     font=ctk.CTkFont(size=13, weight="bold"),
+                     text_color=TEXT).pack(side="left")
+
+        self._task_count = ctk.CTkLabel(top, text="0",
+                                        font=ctk.CTkFont(size=11),
+                                        text_color=MUTED)
+        self._task_count.pack(side="right")
+
+        self._task_list = ctk.CTkScrollableFrame(
+            task_f, fg_color="transparent",
+            scrollbar_button_color=BORDER, height=220)
+        self._task_list.grid(row=1, sticky="nsew", pady=(8, 0))
 
         # Holat
-        self._status = ctk.CTkLabel(sb, text="●  Tayyor",
-                                    font=ctk.CTkFont(size=11),
-                                    text_color=C_GREEN)
-        self._status.grid(row=6, column=0, padx=16, pady=(8, 4), sticky="w")
+        self._stat = ctk.CTkLabel(sb, text="● Kutmoqda",
+                                  font=ctk.CTkFont(size=11),
+                                  text_color=YELLOW)
+        self._stat.grid(row=7, padx=18, pady=(10, 4), sticky="w")
 
-        ctk.CTkButton(sb, text="🗑  Suhbatni tozala",
-                      height=30, fg_color=C_SURFACE, hover_color=C_BORDER,
-                      text_color=C_TEXT, command=self._clear).grid(
-            row=7, column=0, padx=16, pady=(0, 16), sticky="ew")
+        ctk.CTkButton(sb, text="🗑  Tozala", height=30,
+                      fg_color=SURFACE, hover_color=BORDER,
+                      text_color=TEXT, font=ctk.CTkFont(size=11),
+                      command=self._clear).grid(
+            row=8, padx=18, pady=(0, 18), sticky="ew")
 
-    # ── Chat panel ────────────────────────────────────────────────────────────
-    def _build_chat(self):
-        main = ctk.CTkFrame(self, fg_color=C_BG, corner_radius=0)
-        main.grid(row=0, column=1, sticky="nsew")
-        main.grid_rowconfigure(0, weight=1)
-        main.grid_columnconfigure(0, weight=1)
+    # ── Chat paneli ───────────────────────────────────────────────────────────
+    def _chat_panel(self):
+        pane = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
+        pane.grid(row=0, column=1, sticky="nsew")
+        pane.grid_rowconfigure(0, weight=1)
+        pane.grid_columnconfigure(0, weight=1)
 
-        # Scroll
-        self._scroll = ctk.CTkScrollableFrame(
-            main, fg_color=C_BG,
-            scrollbar_button_color=C_BORDER,
-            scrollbar_button_hover_color=C_MUTED)
-        self._scroll.grid(row=0, column=0, sticky="nsew")
-        self._scroll.grid_columnconfigure(0, weight=1)
+        # Suhbat maydoni
+        self._chat = ctk.CTkScrollableFrame(
+            pane, fg_color=BG,
+            scrollbar_button_color=BORDER,
+            scrollbar_button_hover_color=MUTED)
+        self._chat.grid(row=0, column=0, sticky="nsew", padx=0)
+        self._chat.grid_columnconfigure(0, weight=1)
 
-        # Fikrlash ko'rsatkichi
-        self._think_lbl = ctk.CTkLabel(
-            main, text="⏳  JARVIS o'ylamoqda…",
-            font=ctk.CTkFont(size=12), text_color=C_MUTED)
+        # "O'ylamoqda" banner
+        self._thinking = ctk.CTkLabel(
+            pane, text="⏳  JARVIS javob tayyorlamoqda…",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=YELLOW, fg_color=SURFACE,
+            corner_radius=8)
 
-        # Input panel
-        bar = ctk.CTkFrame(main, fg_color=C_SURFACE, corner_radius=14)
-        bar.grid(row=2, column=0, sticky="ew", padx=16, pady=(8, 4))
-        bar.grid_columnconfigure(0, weight=1)
+        # Input qutisi
+        box = ctk.CTkFrame(pane, fg_color=SURFACE, corner_radius=18)
+        box.grid(row=2, column=0, sticky="ew", padx=16, pady=(6, 4))
+        box.grid_columnconfigure(0, weight=1)
 
-        self._input = ctk.CTkTextbox(
-            bar, height=50, fg_color="transparent",
-            border_width=0, text_color=C_TEXT,
-            font=ctk.CTkFont(size=13), wrap="word")
-        self._input.grid(row=0, column=0, sticky="ew", padx=12, pady=8)
-        self._input.bind("<Return>", self._on_enter)
+        self._inp = ctk.CTkTextbox(
+            box, height=54, wrap="word",
+            fg_color="transparent", border_width=0,
+            text_color=TEXT, font=ctk.CTkFont(size=14))
+        self._inp.grid(row=0, column=0, sticky="ew", padx=14, pady=8)
+        self._inp.bind("<Return>", self._enter)
+        self._inp.bind("<Shift-Return>", lambda e: None)
+        self._inp.focus()
 
-        btn_frame = ctk.CTkFrame(bar, fg_color="transparent")
-        btn_frame.grid(row=0, column=1, padx=(0, 8))
+        btns = ctk.CTkFrame(box, fg_color="transparent")
+        btns.grid(row=0, column=1, padx=(0, 10))
 
-        # Mikrofon tugmasi
         self._mic_btn = ctk.CTkButton(
-            btn_frame, text="🎤", width=46, height=36,
-            fg_color=C_SURFACE, hover_color=C_BORDER,
-            font=ctk.CTkFont(size=18),
-            command=self._toggle_mic)
-        self._mic_btn.pack(side="left", padx=(0, 6))
+            btns, text="🎤", width=46, height=40,
+            fg_color=SURFACE, hover_color=BORDER,
+            font=ctk.CTkFont(size=20),
+            command=self._mic_toggle)
+        self._mic_btn.pack(pady=4)
 
-        # Yuborish
-        self._send_btn = ctk.CTkButton(
-            btn_frame, text="Yuborish ↵",
-            width=100, height=36,
-            fg_color=C_ACCENT, hover_color=C_ACC_HV,
+        self._send = ctk.CTkButton(
+            btns, text="↑ Yuborish", width=110, height=40,
+            fg_color=ACCENT, hover_color=ACC_HV,
             font=ctk.CTkFont(size=13, weight="bold"),
-            command=self._on_send)
-        self._send_btn.pack(side="left")
+            command=self._send_msg)
+        self._send.pack(pady=4)
 
-        ctk.CTkLabel(main,
-                     text="Enter — yuborish  •  Shift+Enter — yangi qator  •  🎤 — ovoz",
-                     font=ctk.CTkFont(size=10), text_color=C_MUTED).grid(
+        ctk.CTkLabel(pane,
+                     text="Enter — yuborish  ·  Shift+Enter — yangi qator  ·  🎤 — mikrofon",
+                     font=ctk.CTkFont(size=10), text_color=MUTED).grid(
             row=3, column=0, pady=(0, 8))
 
-    # ── Salomlashish ──────────────────────────────────────────────────────────
-    def _greet(self):
-        self._add_bot(
-            "Salom! Men JARVIS — sizning shaxsiy AI yordamchingizman.\n\n"
-            "Boshlash uchun:\n"
-            "1. Chap panelda OpenAI API kalitingizni kiriting\n"
-            "2. Yozing yoki 🎤 tugmasini bosib gapiringm\n"
-            "3. O'zbek tilida so'rang — o'zbekcha javob beraman!"
-        )
-
     # ── Holat ─────────────────────────────────────────────────────────────────
-    def _set_status(self, text: str, color: str):
-        self._status.configure(text=f"●  {text}", text_color=color)
+    def _status(self, txt: str, color: str = MUTED):
+        self._stat.configure(text=f"● {txt}", text_color=color)
+
+    # ── API ulash ─────────────────────────────────────────────────────────────
+    def _connect(self):
+        k = self._key_entry.get().strip()
+        if not k:
+            return
+        os.environ["OPENAI_API_KEY"] = k
+        self._status("Ulandi ✓", GREEN)
+        self._bot_msg("API kalit saqlandi ✅\nEndi yozing yoki 🎤 ni bosib gapiringm!")
 
     # ── Xabarlar ──────────────────────────────────────────────────────────────
-    def _add_user(self, text: str):
-        ts = datetime.now().strftime("%H:%M")
-        b = Bubble(self._scroll, "user", text, ts)
-        b.grid(sticky="e", padx=(60, 12), pady=3,
-               row=len(self._scroll.winfo_children()), column=0)
-        self._scroll_bottom()
+    def _bot_msg(self, text: str):
+        b = Bubble(self._chat, "assistant", text)
+        b.grid(sticky="w", padx=(12, 60), pady=4,
+               row=len(self._chat.winfo_children()), column=0)
+        self.after(80, lambda: self._chat._parent_canvas.yview_moveto(1.0))
 
-    def _add_bot(self, text: str):
-        ts = datetime.now().strftime("%H:%M")
-        b = Bubble(self._scroll, "assistant", text, ts)
-        b.grid(sticky="w", padx=(12, 60), pady=3,
-               row=len(self._scroll.winfo_children()), column=0)
-        self._scroll_bottom()
+        # Ovoz chiqarish
+        if self._voice_on.get() and len(text) < 400:
+            clean = text.replace("🤖", "").replace("✅", "").replace("①②③", "")
+            self._runner.run(speak_uz(clean))
 
-    def _scroll_bottom(self):
-        self.after(80, lambda: self._scroll._parent_canvas.yview_moveto(1.0))
+    def _user_msg(self, text: str):
+        b = Bubble(self._chat, "user", text)
+        b.grid(sticky="e", padx=(60, 12), pady=4,
+               row=len(self._chat.winfo_children()), column=0)
+        self.after(80, lambda: self._chat._parent_canvas.yview_moveto(1.0))
 
-    # ── Suhbat tozalash ───────────────────────────────────────────────────────
+    # ── Tozalash ──────────────────────────────────────────────────────────────
     def _clear(self):
-        for w in self._scroll.winfo_children():
+        for w in self._chat.winfo_children():
             w.destroy()
         self._history.clear()
-        self._add_bot("Suhbat tozalandi. Yangi savol bering!")
-
-    # ── API kalit ─────────────────────────────────────────────────────────────
-    def _apply_key(self):
-        key = self._api_entry.get().strip()
-        if key:
-            os.environ["OPENAI_API_KEY"] = key
-            self._set_status("Tayyor", C_GREEN)
-            self._add_bot("API kalit saqlandi ✅ Endi gapira olasiz!")
-
-    # ── Vazifalar ─────────────────────────────────────────────────────────────
-    def _add_task(self, title: str, priority: str = "o'rta"):
-        task = {"title": title, "priority": priority, "done": False}
-        self._tasks.append(task)
-        card = TaskCard(self._task_scroll, task, on_done=self._complete_task)
-        card.pack(fill="x", pady=3)
-
-    def _complete_task(self, task: dict):
-        task["done"] = True
-
-    def _refresh_tasks(self):
-        for w in self._task_scroll.winfo_children():
-            w.destroy()
-        for t in self._tasks:
-            if not t.get("done"):
-                TaskCard(self._task_scroll, t, on_done=self._complete_task).pack(
-                    fill="x", pady=3)
+        self._bot_msg("Suhbat tozalandi. Yangi savol berish mumkin!")
 
     # ── Mikrofon ──────────────────────────────────────────────────────────────
-    def _toggle_mic(self):
-        if self._recording:
-            self._stop_recording()
+    def _mic_toggle(self):
+        if self._mic_on:
+            self._mic_stop()
         else:
-            self._start_recording()
+            self._mic_start()
 
-    def _start_recording(self):
+    def _mic_start(self):
         try:
             import sounddevice as sd
             import numpy as np
         except ImportError:
-            self._add_bot("❌ sounddevice o'rnatilmagan:\n`pip install sounddevice scipy`")
+            self._bot_msg("❌ Mikrofon uchun: pip install sounddevice scipy")
             return
 
-        self._recording = True
-        self._audio_buf = []
-        self._mic_btn.configure(text="⏹", fg_color=C_MIC_ACT, hover_color=C_MIC_ACT)
-        self._set_status("Tinglayapman…", C_RED)
+        self._mic_on = True
+        self._audio = []
+        self._mic_btn.configure(text="⏹", fg_color=MIC_ON, hover_color=MIC_ON)
+        self._status("🎤 Tinglayapman…", RED)
 
-        def callback(indata, frames, time, status):
-            self._audio_buf.append(indata.copy())
+        def cb(data, frames, t, status):
+            self._audio.append(data.copy())
 
-        self._sd_stream = sd.InputStream(
-            samplerate=16000, channels=1, dtype="float32", callback=callback)
-        self._sd_stream.start()
+        self._stream = sd.InputStream(
+            samplerate=16000, channels=1, dtype="float32", callback=cb)
+        self._stream.start()
 
-    def _stop_recording(self):
+    def _mic_stop(self):
         import numpy as np
 
-        self._recording = False
-        self._mic_btn.configure(text="🎤", fg_color=C_SURFACE, hover_color=C_BORDER)
-        self._set_status("Ovoz tahlil qilinmoqda…", C_YELLOW)
+        self._mic_on = False
+        self._mic_btn.configure(text="🎤", fg_color=SURFACE, hover_color=BORDER)
+        self._status("Ovoz tahlil qilinmoqda…", YELLOW)
 
-        if self._sd_stream:
-            self._sd_stream.stop()
-            self._sd_stream.close()
-            self._sd_stream = None
+        if self._stream:
+            self._stream.stop()
+            self._stream.close()
+            self._stream = None
 
-        audio = np.concatenate(self._audio_buf, axis=0) if self._audio_buf else None
-        if audio is None or len(audio) < 3200:
-            self._set_status("Tayyor", C_GREEN)
+        if not self._audio:
+            self._status("Tayyor", GREEN)
             return
 
-        self._async.run(
+        audio = np.concatenate(self._audio)
+        if len(audio) < 4800:      # < 0.3 sekund — e'tiborsiz qoldirish
+            self._status("Tayyor", GREEN)
+            return
+
+        self._runner.run(
             self._transcribe(audio),
-            callback=lambda f: self.after(0, lambda: self._on_transcribed(f)),
+            done=lambda f: self.after(0, lambda: self._after_transcribe(f))
         )
 
     async def _transcribe(self, audio) -> str:
-        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if not api_key:
-            return ""
-
         import numpy as np
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not key:
+            return ""
         from openai import AsyncOpenAI
 
-        # WAV faylga yozamiz
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            tmp_path = tmp.name
-
-        audio_int = (audio * 32767).astype(np.int16)
-        with wave.open(tmp_path, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(16000)
-            wf.writeframes(audio_int.tobytes())
+        audio_i16 = (audio * 32767).astype(np.int16)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            path = f.name
+        with wave.open(path, "wb") as wf:
+            wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(16000)
+            wf.writeframes(audio_i16.tobytes())
 
         try:
-            client = AsyncOpenAI(api_key=api_key)
-            with open(tmp_path, "rb") as f:
-                result = await client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=f,
-                    language="uz",        # O'zbek tili
-                    response_format="text",
-                )
-            return str(result).strip()
+            cl = AsyncOpenAI(api_key=key)
+            with open(path, "rb") as fp:
+                r = await cl.audio.transcriptions.create(
+                    model="whisper-1", file=fp,
+                    language="uz", response_format="text")
+            return str(r).strip()
         finally:
-            os.unlink(tmp_path)
+            import os; os.unlink(path)
 
-    def _on_transcribed(self, future):
+    def _after_transcribe(self, future):
+        self._status("Tayyor", GREEN)
         try:
             text = future.result()
         except Exception as e:
-            self._set_status("Tayyor", C_GREEN)
-            self._add_bot(f"❌ Ovoz tanib bo'lmadi: {e}")
+            self._bot_msg(f"❌ Ovoz xatosi: {e}")
             return
-
         if text:
-            self._input.insert("end", text)
-            self._set_status("Tayyor", C_GREEN)
-            self._on_send()
-        else:
-            self._set_status("Tayyor", C_GREEN)
+            self._inp.insert("end", text)
+            self._send_msg()
 
     # ── Xabar yuborish ────────────────────────────────────────────────────────
-    def _on_enter(self, event):
-        if event.state & 0x1:
+    def _enter(self, e):
+        if e.state & 0x1:
             return
-        self._on_send()
+        self._send_msg()
         return "break"
 
-    def _on_send(self):
-        if self._thinking:
+    def _send_msg(self):
+        if self._busy:
             return
-        text = self._input.get("1.0", "end").strip()
+        text = self._inp.get("1.0", "end").strip()
         if not text:
             return
-        self._input.delete("1.0", "end")
-        self._add_user(text)
-        self._thinking = True
-        self._send_btn.configure(state="disabled", text="…")
-        self._think_lbl.grid(row=1, column=0, pady=4)
-        self._set_status("O'ylamoqda…", C_YELLOW)
-        self._async.run(
-            self._chat(text),
-            callback=lambda f: self.after(0, lambda: self._on_reply(f)),
+        self._inp.delete("1.0", "end")
+        self._user_msg(text)
+
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not key:
+            self._bot_msg("❌ Iltimos, chap panelda API kalit kiriting va «Ulash» ni bosing.")
+            return
+
+        self._busy = True
+        self._send.configure(state="disabled", text="…")
+        self._thinking.grid(row=1, column=0, pady=6, padx=16, sticky="ew")
+        self._status("O'ylamoqda…", YELLOW)
+
+        self._runner.run(
+            self._ai(text),
+            done=lambda f: self.after(0, lambda: self._on_reply(f))
         )
 
-    async def _chat(self, user_text: str) -> str:
-        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if not api_key:
-            return "❌ Iltimos, chap panelda OpenAI API kalitingizni kiriting."
-
+    async def _ai(self, text: str) -> str:
         from openai import AsyncOpenAI
+        key = os.environ.get("OPENAI_API_KEY", "")
+        self._history.append({"role": "user", "content": text})
+        msgs = [{"role": "system", "content": SYSTEM}] + self._history[-20:]
 
-        self._history.append({"role": "user", "content": user_text})
-
-        messages = [{"role": "system", "content": SYSTEM_PROMPT_UZ}] + self._history
-
-        client = AsyncOpenAI(api_key=api_key)
         try:
-            resp = await client.chat.completions.create(
-                model=self._model_var.get(),
-                messages=messages,
+            cl = AsyncOpenAI(api_key=key)
+            r = await cl.chat.completions.create(
+                model=self._model.get(),
+                messages=msgs,
                 temperature=0.7,
-                max_tokens=1024,
-            )
-            reply = resp.choices[0].message.content or ""
+                max_tokens=1024)
+            reply = r.choices[0].message.content or ""
             self._history.append({"role": "assistant", "content": reply})
             return reply
         except Exception as e:
             return f"❌ Xato: {e}"
 
     def _on_reply(self, future):
-        self._thinking = False
-        self._send_btn.configure(state="normal", text="Yuborish ↵")
-        self._think_lbl.grid_forget()
-        self._set_status("Tayyor", C_GREEN)
+        self._busy = False
+        self._send.configure(state="normal", text="↑ Yuborish")
+        self._thinking.grid_forget()
+        self._status("Tayyor", GREEN)
 
         try:
             reply = future.result()
         except Exception as e:
             reply = f"❌ Kutilmagan xato: {e}"
 
-        # Vazifa buyrug'ini tekshirish
+        # Vazifa buyrug'i
         import json, re
-        m = re.search(r'\{[^}]+\}', reply)
-        if m:
+        for m in re.finditer(r'\{[^{}]+\}', reply):
             try:
                 cmd = json.loads(m.group())
-                if cmd.get("action") == "add_task":
-                    self._add_task(cmd["title"], cmd.get("priority", "o'rta"))
-                    reply = reply.replace(m.group(), "").strip()
-                    reply += f"\n✅ Vazifa qo'shildi: «{cmd['title']}»"
-                elif cmd.get("action") == "list_tasks":
-                    active = [t for t in self._tasks if not t.get("done")]
+                if cmd.get("action") == "vazifa":
+                    self._add_task(cmd.get("sarlavha", "Nomsiz"),
+                                   cmd.get("muhimlik", "o'rta"))
+                    reply = reply[:m.start()].strip()
+                elif cmd.get("action") == "vazifalar_korsatish":
+                    active = [t for t in self._tasks if not t["bajarildi"]]
                     if active:
-                        items = "\n".join(f"• {t['title']} [{t['priority']}]" for t in active)
-                        reply = f"📋 Faol vazifalar:\n{items}"
+                        lst = "\n".join(f"• {t['sarlavha']} [{t['muhimlik']}]"
+                                        for t in active)
+                        reply = f"📋 Vazifalar ro'yxati:\n{lst}"
                     else:
                         reply = "📋 Hozircha hech qanday vazifa yo'q."
             except Exception:
                 pass
 
-        self._add_bot(reply)
+        if reply:
+            self._bot_msg(reply)
+
+    # ── Vazifalar ─────────────────────────────────────────────────────────────
+    def _add_task(self, sarlavha: str, muhimlik: str = "o'rta"):
+        t = {"sarlavha": sarlavha, "muhimlik": muhimlik, "bajarildi": False}
+        self._tasks.append(t)
+        self._draw_task(t)
+        active = sum(1 for x in self._tasks if not x["bajarildi"])
+        self._task_count.configure(text=str(active))
+
+    def _draw_task(self, t: dict):
+        colors = {"yuqori": RED, "o'rta": YELLOW, "past": GREEN}
+        dot = colors.get(t["muhimlik"], YELLOW)
+
+        card = ctk.CTkFrame(self._task_list, fg_color=SURFACE, corner_radius=8)
+        card.pack(fill="x", pady=3)
+
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=8, pady=6)
+
+        ctk.CTkLabel(row, text="●", text_color=dot,
+                     font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 6))
+
+        ctk.CTkLabel(row, text=t["sarlavha"],
+                     font=ctk.CTkFont(size=12), text_color=TEXT,
+                     anchor="w").pack(side="left", fill="x", expand=True)
+
+        def done(c=card, task=t):
+            task["bajarildi"] = True
+            c.destroy()
+            active = sum(1 for x in self._tasks if not x["bajarildi"])
+            self._task_count.configure(text=str(active))
+
+        ctk.CTkButton(row, text="✓", width=28, height=22,
+                      fg_color="transparent", hover_color=GREEN,
+                      text_color=MUTED, font=ctk.CTkFont(size=12),
+                      command=done).pack(side="right")
 
     # ── Yopish ────────────────────────────────────────────────────────────────
     def on_close(self):
-        if self._recording:
-            self._stop_recording()
-        self._async.stop()
+        if self._mic_on:
+            self._mic_stop()
+        self._runner.stop()
         self.destroy()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-def main():
-    app = JarvisApp()
+if __name__ == "__main__":
+    app = JARVIS()
     app.protocol("WM_DELETE_WINDOW", app.on_close)
     app.mainloop()
-
-
-if __name__ == "__main__":
-    main()
