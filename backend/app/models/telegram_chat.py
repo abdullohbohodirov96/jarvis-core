@@ -19,10 +19,10 @@ from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import UniqueConstraint
 
-from backend.app.models.base import TimestampedBase
+from app.models.base import TimestampedBase
 
 if TYPE_CHECKING:
-    from backend.app.models.user import User
+    from app.models.user import User
 
 
 class TelegramChatType(str, enum.Enum):

@@ -13,8 +13,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.models.conversation import ConversationSource
-from backend.app.models.message import MessageRole, MessageSource
+from app.models.conversation import ConversationSource
+from app.models.message import MessageRole, MessageSource
 
 
 # ---------------------------------------------------------------------------

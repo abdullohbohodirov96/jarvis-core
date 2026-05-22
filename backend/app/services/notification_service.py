@@ -18,12 +18,12 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from backend.app.core.exceptions import TelegramException
+from app.core.exceptions import TelegramException
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from backend.app.telegram.client import TelegramClientManager
+    from app.telegram.client import TelegramClientManager
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +171,7 @@ class NotificationService:
             )
             return False
 
-        from backend.app.services.task_service import TaskService
+        from app.services.task_service import TaskService
 
         task_service = TaskService(db_session=self._db, user_id=user_id)
         summary = await task_service.get_daily_summary()
@@ -347,7 +347,7 @@ class NotificationService:
         Returns:
             True if a notification (voice or text) was sent.
         """
-        from backend.app.core.config import get_settings
+        from app.core.config import get_settings
 
         settings = get_settings()
         user_tg_id = await self._get_user_telegram_id(user_id)

@@ -28,7 +28,7 @@ _celery_app: Celery | None = None
 
 def _create_celery_app() -> Celery:
     """Build and return a fully configured Celery application instance."""
-    from backend.app.core.config import get_settings
+    from app.core.config import get_settings
 
     settings = get_settings()
 

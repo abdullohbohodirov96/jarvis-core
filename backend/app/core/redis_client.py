@@ -12,7 +12,7 @@ collisions when sharing a Redis instance with other services.
 
 Usage example::
 
-    from backend.app.core.redis_client import RedisCache
+    from app.core.redis_client import RedisCache
 
     cache = RedisCache()
 
@@ -35,7 +35,7 @@ from typing import Any, Optional
 import redis.asyncio as aioredis
 from redis.asyncio import Redis
 
-from backend.app.core.config import get_settings
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -574,6 +574,6 @@ class RedisCache:
 
 #: Default module-level cache instance.  Import and use directly:
 #:
-#:   from backend.app.core.redis_client import cache
+#:   from app.core.redis_client import cache
 #:   await cache.set("foo", {"bar": 1}, ttl=60)
 cache: RedisCache = RedisCache()

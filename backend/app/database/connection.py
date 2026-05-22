@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from backend.app.core.config import get_settings
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ async def init_db() -> None:
     """
     # Import every model module so that their tables register on Base.metadata
     # before we call create_all.
-    import backend.app.models  # noqa: F401 – side-effect import
+    import app.models  # noqa: F401 – side-effect import
 
     engine = get_engine()
     async with engine.begin() as conn:

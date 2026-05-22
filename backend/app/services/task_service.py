@@ -17,12 +17,12 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select, text as sa_text, update
 
-from backend.app.core.exceptions import AIException, NotFoundException, ValidationException
+from app.core.exceptions import AIException, NotFoundException, ValidationException
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from backend.app.ai.client import OpenAIClient
+    from app.ai.client import OpenAIClient
 
 logger = logging.getLogger(__name__)
 

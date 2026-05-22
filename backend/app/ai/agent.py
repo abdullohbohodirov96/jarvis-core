@@ -20,9 +20,9 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.ai.client import OpenAIClient, get_openai_client
-from backend.app.ai.tools.base import ToolRegistry
-from backend.app.core.config import get_settings
+from app.ai.client import OpenAIClient, get_openai_client
+from app.ai.tools.base import ToolRegistry
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -393,7 +393,7 @@ class JarvisAgent:
             except Exception:
                 pass
 
-        from backend.app.ai.prompts.system_prompts import (
+        from app.ai.prompts.system_prompts import (
             JARVIS_SYSTEM_PROMPT,
             build_system_prompt,
         )
@@ -445,7 +445,7 @@ class JarvisAgent:
         current_time = datetime.now(timezone.utc).strftime("%A, %B %d %Y at %H:%M UTC")
 
         if self._user is not None:
-            from backend.app.ai.prompts.system_prompts import build_system_prompt
+            from app.ai.prompts.system_prompts import build_system_prompt
 
             return build_system_prompt(
                 user=self._user,
@@ -453,7 +453,7 @@ class JarvisAgent:
                 current_time=current_time,
             )
 
-        from backend.app.ai.prompts.system_prompts import JARVIS_SYSTEM_PROMPT
+        from app.ai.prompts.system_prompts import JARVIS_SYSTEM_PROMPT
 
         return JARVIS_SYSTEM_PROMPT.format(
             user_name="User",
@@ -591,7 +591,7 @@ class JarvisAgent:
         Returns:
             List of extracted task dicts (for logging/testing).
         """
-        from backend.app.ai.prompts.system_prompts import TASK_EXTRACTION_PROMPT
+        from app.ai.prompts.system_prompts import TASK_EXTRACTION_PROMPT
 
         # Only extract if there are enough messages and no tool-created tasks
         # to avoid duplicate creation
@@ -649,7 +649,7 @@ class JarvisAgent:
             if not title:
                 continue
             try:
-                from backend.app.models.task import Task  # type: ignore[import]
+                from app.models.task import Task  # type: ignore[import]
 
                 due_date = None
                 raw_due = task_data.get("due_date")

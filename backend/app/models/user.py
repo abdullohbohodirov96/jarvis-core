@@ -15,14 +15,14 @@ from sqlalchemy import BigInteger, Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import TimestampedBase
+from app.models.base import TimestampedBase
 
 if TYPE_CHECKING:
-    from backend.app.models.conversation import Conversation
-    from backend.app.models.memory import Memory
-    from backend.app.models.task import Task
-    from backend.app.models.telegram_chat import TelegramChat
-    from backend.app.models.scheduled_message import ScheduledMessage
+    from app.models.conversation import Conversation
+    from app.models.memory import Memory
+    from app.models.task import Task
+    from app.models.telegram_chat import TelegramChat
+    from app.models.scheduled_message import ScheduledMessage
 
 
 class User(TimestampedBase):

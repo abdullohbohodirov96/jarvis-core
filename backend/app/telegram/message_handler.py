@@ -18,15 +18,15 @@ from uuid import UUID
 from telethon import TelegramClient, errors, events
 from telethon.tl.types import Message, PeerChannel, PeerChat, PeerUser
 
-from backend.app.core.exceptions import TelegramException
+from app.core.exceptions import TelegramException
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from backend.app.ai.client import OpenAIClient
-    from backend.app.telegram.auto_reply import TelegramAutoReply
-    from backend.app.telegram.client import TelegramClientManager
-    from backend.app.telegram.task_detector import TelegramTaskDetector
+    from app.ai.client import OpenAIClient
+    from app.telegram.auto_reply import TelegramAutoReply
+    from app.telegram.client import TelegramClientManager
+    from app.telegram.task_detector import TelegramTaskDetector
 
 logger = logging.getLogger(__name__)
 

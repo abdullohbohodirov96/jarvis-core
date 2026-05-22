@@ -15,10 +15,10 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.app.core.config import get_settings
-from backend.app.core.exceptions import register_exception_handlers
-from backend.app.core.logging_config import get_logger, setup_logging
-from backend.app.core.middleware import setup_middleware
+from app.core.config import get_settings
+from app.core.exceptions import register_exception_handlers
+from app.core.logging_config import get_logger, setup_logging
+from app.core.middleware import setup_middleware
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -180,7 +180,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Celery – just import to ensure tasks are registered
     try:
-        import backend.app.workers  # noqa: F401  # type: ignore
+        import app.workers  # noqa: F401  # type: ignore
 
         logger.info("celery_workers_imported")
     except ImportError:
@@ -242,9 +242,13 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     # API routers
-    from backend.app.api.router import api_router
+    from app.api.router import api_router
 
     app.include_router(api_router, prefix="/api/v1")
+
+    # Health endpoints also available at root level for k8s/load-balancer probes
+    from app.api.v1.endpoints.health import router as health_router
+    app.include_router(health_router, prefix="/health", tags=["Health"])
 
     # Static files (frontend build artefacts)
     try:
@@ -300,7 +304,7 @@ def create_app() -> FastAPI:
 
                 # Delegate to the AI service if available; echo otherwise.
                 try:
-                    from backend.app.ai.chat_service import stream_chat_response  # type: ignore
+                    from app.ai.chat_service import stream_chat_response  # type: ignore
 
                     async for token in stream_chat_response(message, conversation_id):
                         await ws_manager.send_json(

@@ -20,13 +20,13 @@ from uuid import UUID
 
 from sqlalchemy import text as sa_text
 
-from backend.app.core.config import get_settings
-from backend.app.core.exceptions import AIException, NotFoundException
+from app.core.config import get_settings
+from app.core.exceptions import AIException, NotFoundException
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from backend.app.ai.client import OpenAIClient
+    from app.ai.client import OpenAIClient
 
 logger = logging.getLogger(__name__)
 

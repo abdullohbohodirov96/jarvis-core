@@ -90,7 +90,7 @@ class EpisodicMemory:
         import uuid
 
         try:
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
 
             episode_meta: dict[str, Any] = {
                 "event_type": event_type,
@@ -153,7 +153,7 @@ class EpisodicMemory:
         """
         try:
             from sqlalchemy import select, and_
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
             import uuid
 
             since = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -206,8 +206,8 @@ class EpisodicMemory:
             List of episode dicts sorted by relevance (most relevant first).
         """
         try:
-            from backend.app.ai.client import get_openai_client
-            from backend.app.memory.vector_store import VectorStore
+            from app.ai.client import get_openai_client
+            from app.memory.vector_store import VectorStore
 
             ai = get_openai_client()
             embeddings = await ai.embedding(query)
@@ -284,7 +284,7 @@ class EpisodicMemory:
 
         try:
             from sqlalchemy import select, and_
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
             import uuid
 
             stmt = (
@@ -317,7 +317,7 @@ class EpisodicMemory:
         corpus = "\n".join(bullet_lines)
 
         try:
-            from backend.app.ai.client import get_openai_client
+            from app.ai.client import get_openai_client
 
             ai = get_openai_client()
             prompt = (
@@ -378,7 +378,7 @@ class EpisodicMemory:
         """
         try:
             from sqlalchemy import select, func
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
             import uuid
 
             count_stmt = select(func.count(Memory.id)).where(

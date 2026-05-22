@@ -17,8 +17,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.ai.client import OpenAIClient
-from backend.app.core.config import get_settings
+from app.ai.client import OpenAIClient
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -110,7 +110,7 @@ class ContextManager:
         # 3. Build system prompt
         if system_prompt is None:
             if user is not None:
-                from backend.app.ai.prompts.system_prompts import build_system_prompt
+                from app.ai.prompts.system_prompts import build_system_prompt
 
                 current_time = datetime.now(timezone.utc).strftime(
                     "%A, %B %d %Y at %H:%M UTC"
@@ -121,7 +121,7 @@ class ContextManager:
                     current_time=current_time,
                 )
             else:
-                from backend.app.ai.prompts.system_prompts import JARVIS_SYSTEM_PROMPT
+                from app.ai.prompts.system_prompts import JARVIS_SYSTEM_PROMPT
 
                 system_prompt = JARVIS_SYSTEM_PROMPT.format(
                     user_name="User",
@@ -189,7 +189,7 @@ class ContextManager:
             logger.warning("summarize_if_needed: no OpenAI client set")
             return None
 
-        from backend.app.ai.summarizer import ConversationSummarizer
+        from app.ai.summarizer import ConversationSummarizer
 
         summarizer = ConversationSummarizer(self._client)
         openai_msgs = self._messages_to_openai_format(to_summarise)
@@ -200,7 +200,7 @@ class ContextManager:
 
         # Persist summary
         try:
-            from backend.app.models.conversation import Conversation  # type: ignore[import]
+            from app.models.conversation import Conversation  # type: ignore[import]
 
             stmt = select(Conversation).where(Conversation.id == conversation_id)
             result = await self._db.execute(stmt)
@@ -248,7 +248,7 @@ class ContextManager:
             List of Message ORM objects ordered oldest-first.
         """
         try:
-            from backend.app.models.message import Message  # type: ignore[import]
+            from app.models.message import Message  # type: ignore[import]
 
             stmt = (
                 select(Message)
@@ -414,7 +414,7 @@ class ContextManager:
     ) -> str | None:
         """Retrieve a stored summary for this conversation from the DB."""
         try:
-            from backend.app.models.conversation import Conversation  # type: ignore[import]
+            from app.models.conversation import Conversation  # type: ignore[import]
 
             stmt = select(Conversation).where(Conversation.id == conversation_id)
             result = await self._db.execute(stmt)

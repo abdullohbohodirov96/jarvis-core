@@ -18,11 +18,11 @@ from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import TimestampedBase
+from app.models.base import TimestampedBase
 
 if TYPE_CHECKING:
-    from backend.app.models.conversation import Conversation
-    from backend.app.models.user import User
+    from app.models.conversation import Conversation
+    from app.models.user import User
 
 
 class MemoryType(str, enum.Enum):

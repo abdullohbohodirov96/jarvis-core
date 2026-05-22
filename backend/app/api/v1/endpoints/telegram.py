@@ -18,10 +18,10 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, status
 from pydantic import BaseModel, Field
 
-from backend.app.core.config import get_settings
-from backend.app.core.exceptions import TelegramException
-from backend.app.core.logging_config import get_logger
-from backend.app.utils.helpers import generate_id, now_utc
+from app.core.config import get_settings
+from app.core.exceptions import TelegramException
+from app.core.logging_config import get_logger
+from app.utils.helpers import generate_id, now_utc
 
 logger = get_logger(__name__)
 settings = get_settings()

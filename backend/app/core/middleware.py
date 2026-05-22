@@ -23,8 +23,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
-from backend.app.core.config import get_settings
-from backend.app.core.logging_config import (
+from app.core.config import get_settings
+from app.core.logging_config import (
     bind_request_id,
     clear_request_context,
     get_logger,

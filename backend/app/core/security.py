@@ -19,9 +19,9 @@ from jose import ExpiredSignatureError, JWTError, jwt  # type: ignore
 from passlib.context import CryptContext  # type: ignore
 from pydantic import BaseModel, Field
 
-from backend.app.core.config import get_settings
-from backend.app.core.exceptions import AuthException
-from backend.app.core.logging_config import get_logger
+from app.core.config import get_settings
+from app.core.exceptions import AuthException
+from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()

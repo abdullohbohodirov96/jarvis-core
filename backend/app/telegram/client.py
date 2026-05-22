@@ -30,8 +30,8 @@ from telethon.tl.types import (
     User,
 )
 
-from backend.app.core.config import get_settings
-from backend.app.core.exceptions import TelegramException
+from app.core.config import get_settings
+from app.core.exceptions import TelegramException
 
 logger = logging.getLogger(__name__)
 

@@ -24,7 +24,7 @@ import tiktoken
 from openai import AsyncOpenAI, RateLimitError, APIStatusError, APIConnectionError
 from openai.types.chat import ChatCompletionMessageParam
 
-from backend.app.core.config import get_settings
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 

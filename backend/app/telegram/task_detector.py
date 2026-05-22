@@ -16,12 +16,12 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from backend.app.core.exceptions import AIException
+from app.core.exceptions import AIException
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from backend.app.ai.client import OpenAIClient
+    from app.ai.client import OpenAIClient
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +267,7 @@ class TelegramTaskDetector:
             All detected tasks from the analysed message batch.
         """
         # Import here to avoid circular imports
-        from backend.app.telegram.client import get_telegram_client
+        from app.telegram.client import get_telegram_client
 
         client = await get_telegram_client()
         since = datetime.now(timezone.utc) - timedelta(days=days_back)

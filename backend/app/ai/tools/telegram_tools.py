@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.ai.tools.base import BaseTool
+from app.ai.tools.base import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class SendTelegramMessageTool(BaseTool):
 
         try:
             # Import the Telegram client service if available
-            from backend.app.telegram.client import get_telegram_client  # type: ignore[import]
+            from app.telegram.client import get_telegram_client  # type: ignore[import]
 
             client = await get_telegram_client(self._user_id, self._db)
             if client is None:
@@ -181,7 +181,7 @@ class GetTelegramMessagesTool(BaseTool):
                 pass
 
         try:
-            from backend.app.telegram.client import get_telegram_client  # type: ignore[import]
+            from app.telegram.client import get_telegram_client  # type: ignore[import]
 
             client = await get_telegram_client(self._user_id, self._db)
             if client is None:
@@ -270,7 +270,7 @@ class SearchTelegramChatsTool(BaseTool):
             return {"success": False, "error": "Query cannot be empty.", "chats": []}
 
         try:
-            from backend.app.telegram.client import get_telegram_client  # type: ignore[import]
+            from app.telegram.client import get_telegram_client  # type: ignore[import]
 
             client = await get_telegram_client(self._user_id, self._db)
             if client is None:
@@ -394,7 +394,7 @@ class ScheduleTelegramMessageTool(BaseTool):
             }
 
         try:
-            from backend.app.models.scheduled_message import ScheduledMessage  # type: ignore[import]
+            from app.models.scheduled_message import ScheduledMessage  # type: ignore[import]
 
             scheduled = ScheduledMessage(
                 user_id=self._user_id,

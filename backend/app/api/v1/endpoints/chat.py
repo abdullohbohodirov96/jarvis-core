@@ -18,9 +18,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from backend.app.core.exceptions import AIException, NotFoundException
-from backend.app.core.logging_config import get_logger
-from backend.app.utils.helpers import generate_id, now_utc
+from app.core.exceptions import AIException, NotFoundException
+from app.core.logging_config import get_logger
+from app.utils.helpers import generate_id, now_utc
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -131,7 +131,7 @@ async def _stream_ai_response(
     """
     try:
         from openai import AsyncOpenAI  # type: ignore
-        from backend.app.core.config import get_settings
+        from app.core.config import get_settings
 
         settings = get_settings()
         client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
@@ -335,7 +335,7 @@ async def summarize_conversation(conversation_id: str) -> SummaryResponse:
     summary_text = ""
     try:
         from openai import AsyncOpenAI  # type: ignore
-        from backend.app.core.config import get_settings
+        from app.core.config import get_settings
 
         cfg = get_settings()
         client = AsyncOpenAI(api_key=cfg.OPENAI_API_KEY)

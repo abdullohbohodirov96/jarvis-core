@@ -68,7 +68,7 @@ class WhisperSTT:
 
         if use_api:
             from openai import AsyncOpenAI
-            from backend.app.core.config import get_settings
+            from app.core.config import get_settings
             settings = get_settings()
             self._openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         else:
@@ -387,7 +387,7 @@ def get_stt_engine() -> WhisperSTT:
     """
     global _stt_instance
     if _stt_instance is None:
-        from backend.app.core.config import get_settings
+        from app.core.config import get_settings
         settings = get_settings()
         use_api = bool(settings.OPENAI_API_KEY)
         _stt_instance = WhisperSTT(

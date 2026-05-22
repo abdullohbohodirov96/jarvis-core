@@ -342,7 +342,7 @@ class TTSManager:
         self._init_providers()
 
     def _init_providers(self) -> None:
-        from backend.app.core.config import get_settings
+        from app.core.config import get_settings
         settings = get_settings()
 
         self._edge = EdgeTTS(voice="en-US-AriaNeural")
@@ -458,7 +458,7 @@ def get_tts_manager() -> TTSManager:
     """
     global _tts_manager_instance
     if _tts_manager_instance is None:
-        from backend.app.core.config import get_settings
+        from app.core.config import get_settings
         settings = get_settings()
         provider = "elevenlabs" if settings.ELEVENLABS_API_KEY else "edge"
         _tts_manager_instance = TTSManager(provider=provider)

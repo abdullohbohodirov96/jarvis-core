@@ -18,7 +18,7 @@ from typing import Any
 
 from celery.utils.log import get_task_logger
 
-from backend.app.workers.celery_app import get_celery_app
+from app.workers.celery_app import get_celery_app
 
 celery_app = get_celery_app()
 logger = get_task_logger(__name__)
@@ -45,8 +45,8 @@ async def _get_all_user_ids() -> list[str]:
     """Return list of active user ID strings from DB."""
     try:
         from sqlalchemy import select
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.user import User
+        from app.database.connection import AsyncSessionLocal
+        from app.models.user import User
 
         async with AsyncSessionLocal() as session:
             stmt = select(User.id).where(
@@ -134,9 +134,9 @@ async def _consolidate_single_user(user_id: str) -> None:
     """
     try:
         from sqlalchemy import select, and_
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.memory import Memory  # type: ignore[import]
-        from backend.app.ai.client import get_openai_client
+        from app.database.connection import AsyncSessionLocal
+        from app.models.memory import Memory  # type: ignore[import]
+        from app.ai.client import get_openai_client
         import uuid
 
         since = datetime.now(timezone.utc) - timedelta(hours=48)
@@ -245,8 +245,8 @@ async def _async_generate_daily_summary(user_id: str) -> str:
     # Tasks section
     try:
         from sqlalchemy import select, and_
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.task import Task  # type: ignore[import]
+        from app.database.connection import AsyncSessionLocal
+        from app.models.task import Task  # type: ignore[import]
         import uuid
 
         async with AsyncSessionLocal() as session:
@@ -272,8 +272,8 @@ async def _async_generate_daily_summary(user_id: str) -> str:
     # Memories / context section
     try:
         from sqlalchemy import select, and_
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.memory import Memory  # type: ignore[import]
+        from app.database.connection import AsyncSessionLocal
+        from app.models.memory import Memory  # type: ignore[import]
         import uuid
 
         since = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -304,7 +304,7 @@ async def _async_generate_daily_summary(user_id: str) -> str:
 
     # Optionally send via Telegram
     try:
-        from backend.app.workers.tasks.telegram_tasks import _dispatch_telegram_message
+        from app.workers.tasks.telegram_tasks import _dispatch_telegram_message
         await _dispatch_telegram_message(user_id, None, summary)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not send daily summary via Telegram: %s", exc)
@@ -357,11 +357,11 @@ async def _async_extract_tasks_from_conversation(
 
     try:
         from sqlalchemy import select
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.conversation import Conversation
-        from backend.app.models.message import Message, MessageRole
-        from backend.app.models.task import Task  # type: ignore[import]
-        from backend.app.ai.client import get_openai_client
+        from app.database.connection import AsyncSessionLocal
+        from app.models.conversation import Conversation
+        from app.models.message import Message, MessageRole
+        from app.models.task import Task  # type: ignore[import]
+        from app.ai.client import get_openai_client
         import uuid
 
         async with AsyncSessionLocal() as session:
@@ -467,9 +467,9 @@ async def _async_cleanup_expired_memories() -> dict[str, Any]:
 
     try:
         from sqlalchemy import select, and_, or_
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.memory import Memory  # type: ignore[import]
-        from backend.app.core.config import get_settings
+        from app.database.connection import AsyncSessionLocal
+        from app.models.memory import Memory  # type: ignore[import]
+        from app.core.config import get_settings
 
         settings = get_settings()
         decay_cutoff = datetime.now(timezone.utc) - timedelta(

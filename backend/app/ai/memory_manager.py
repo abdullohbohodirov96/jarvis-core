@@ -21,8 +21,8 @@ from typing import Any
 from sqlalchemy import select, text, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.ai.client import OpenAIClient
-from backend.app.core.config import get_settings
+from app.ai.client import OpenAIClient
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -93,7 +93,7 @@ class MemoryManager:
             logger.warning("Could not generate embedding for memory: %s", exc)
 
         try:
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
 
             memory = Memory(
                 user_id=self._user_id,
@@ -161,7 +161,7 @@ class MemoryManager:
             logger.warning("search_memories: could not embed query: %s", exc)
 
         try:
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
 
             # Fetch a superset of candidates from DB (filter by type if given)
             stmt = select(Memory).where(Memory.user_id == self._user_id)
@@ -247,7 +247,7 @@ class MemoryManager:
         """
         removed = 0
         try:
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
 
             cutoff_date = datetime.now(timezone.utc) - timedelta(
                 hours=settings.MEMORY_DECAY_HOURS
@@ -335,7 +335,7 @@ class MemoryManager:
 
         # Also fetch standing instructions (high importance, instruction type)
         try:
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
 
             instr_stmt = (
                 select(Memory)
@@ -376,7 +376,7 @@ class MemoryManager:
         """
         updated = 0
         try:
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
 
             decay_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
             stmt = select(Memory).where(
@@ -428,7 +428,7 @@ class MemoryManager:
         if not conversation:
             return []
 
-        from backend.app.ai.prompts.system_prompts import MEMORY_EXTRACTION_PROMPT
+        from app.ai.prompts.system_prompts import MEMORY_EXTRACTION_PROMPT
 
         # Flatten conversation to text
         conv_text = "\n".join(

@@ -18,8 +18,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.ai.client import OpenAIClient
-from backend.app.ai.prompts.system_prompts import SUMMARIZATION_PROMPT
+from app.ai.client import OpenAIClient
+from app.ai.prompts.system_prompts import SUMMARIZATION_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class ConversationSummarizer:
         if not messages:
             return []
 
-        from backend.app.ai.prompts.system_prompts import MEMORY_EXTRACTION_PROMPT
+        from app.ai.prompts.system_prompts import MEMORY_EXTRACTION_PROMPT
 
         user_assistant_msgs = [
             m for m in messages
@@ -221,7 +221,7 @@ class ConversationSummarizer:
         events_data: list[dict[str, Any]] = []
 
         try:
-            from backend.app.models.task import Task  # type: ignore[import]
+            from app.models.task import Task  # type: ignore[import]
 
             stmt = select(Task).where(
                 Task.user_id == user_id,
@@ -243,8 +243,8 @@ class ConversationSummarizer:
             logger.warning("daily_summary: could not fetch tasks: %s", exc)
 
         try:
-            from backend.app.models.conversation import Conversation  # type: ignore[import]
-            from backend.app.models.message import Message  # type: ignore[import]
+            from app.models.conversation import Conversation  # type: ignore[import]
+            from app.models.message import Message  # type: ignore[import]
 
             conv_stmt = select(Conversation).where(
                 Conversation.user_id == user_id,
@@ -278,7 +278,7 @@ class ConversationSummarizer:
             logger.warning("daily_summary: could not fetch messages: %s", exc)
 
         # ── Build the report via template ──────────────────────────────────────
-        from backend.app.ai.prompts.templates import daily_summary_template
+        from app.ai.prompts.templates import daily_summary_template
 
         template_output = daily_summary_template(
             tasks=tasks_data,

@@ -5,7 +5,7 @@ Attempts to use structlog for rich structured/JSON logging.
 Falls back gracefully to stdlib logging if structlog is not installed.
 
 Usage:
-    from backend.app.core.logging_config import get_logger
+    from app.core.logging_config import get_logger
 
     logger = get_logger(__name__)
     logger.info("Something happened", user_id=42, action="login")
@@ -166,6 +166,33 @@ def setup_logging(log_level: str = "INFO", is_production: bool = False) -> None:
         _setup_stdlib(level, is_production)
 
 
+class _StdlibLoggerWrapper:
+    """Wraps stdlib Logger to accept structlog-style keyword arguments."""
+
+    def __init__(self, logger: logging.Logger) -> None:
+        self._logger = logger
+
+    def _log(self, level: int, event: str, **kwargs: Any) -> None:
+        extra = " ".join(f"{k}={v!r}" for k, v in kwargs.items())
+        msg = f"{event} {extra}" if extra else event
+        self._logger.log(level, msg)
+
+    def debug(self, event: str, **kwargs: Any) -> None:
+        self._log(logging.DEBUG, event, **kwargs)
+
+    def info(self, event: str, **kwargs: Any) -> None:
+        self._log(logging.INFO, event, **kwargs)
+
+    def warning(self, event: str, **kwargs: Any) -> None:
+        self._log(logging.WARNING, event, **kwargs)
+
+    def error(self, event: str, **kwargs: Any) -> None:
+        self._log(logging.ERROR, event, **kwargs)
+
+    def critical(self, event: str, **kwargs: Any) -> None:
+        self._log(logging.CRITICAL, event, **kwargs)
+
+
 def get_logger(name: str) -> Any:
     """Return a logger bound to *name*.
 
@@ -178,7 +205,7 @@ def get_logger(name: str) -> Any:
     """
     if _STRUCTLOG_AVAILABLE:
         return structlog.get_logger(name)
-    return logging.getLogger(name)
+    return _StdlibLoggerWrapper(logging.getLogger(name))
 
 
 def bind_request_id(request_id: str) -> None:

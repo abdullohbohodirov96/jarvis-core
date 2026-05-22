@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from backend.app.ai.client import OpenAIClient
-    from backend.app.telegram.client import TelegramClientManager
+    from app.ai.client import OpenAIClient
+    from app.telegram.client import TelegramClientManager
 
 logger = logging.getLogger(__name__)
 

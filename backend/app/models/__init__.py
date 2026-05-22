@@ -6,21 +6,21 @@ Importing this package ensures every model class is registered on
 
 Usage (in application code)::
 
-    import backend.app.models  # noqa: F401 – registers all models
+    import app.models  # noqa: F401 – registers all models
 
 Or import individual models directly::
 
-    from backend.app.models import User, Conversation, Message
+    from app.models import User, Conversation, Message
 """
 
-from backend.app.models.base import TimestampedBase
-from backend.app.models.conversation import Conversation, ConversationSource
-from backend.app.models.memory import Memory, MemoryType
-from backend.app.models.message import Message, MessageRole, MessageSource
-from backend.app.models.scheduled_message import ScheduledMessage, ScheduledMessageStatus
-from backend.app.models.task import Task, TaskPriority, TaskSource, TaskStatus
-from backend.app.models.telegram_chat import TelegramChat, TelegramChatType
-from backend.app.models.user import User
+from app.models.base import TimestampedBase
+from app.models.conversation import Conversation, ConversationSource
+from app.models.memory import Memory, MemoryType
+from app.models.message import Message, MessageRole, MessageSource
+from app.models.scheduled_message import ScheduledMessage, ScheduledMessageStatus
+from app.models.task import Task, TaskPriority, TaskSource, TaskStatus
+from app.models.telegram_chat import TelegramChat, TelegramChatType
+from app.models.user import User
 
 __all__ = [
     # Base

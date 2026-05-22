@@ -17,8 +17,8 @@ from telethon import TelegramClient, errors
 from telethon.sessions import StringSession
 from telethon.tl.types import User
 
-from backend.app.core.config import get_settings
-from backend.app.core.exceptions import AuthException, TelegramException
+from app.core.config import get_settings
+from app.core.exceptions import AuthException, TelegramException
 
 logger = logging.getLogger(__name__)
 
@@ -329,7 +329,7 @@ class TelegramSessionManager:
 
         # Also invalidate the main client singleton
         try:
-            from backend.app.telegram.client import get_telegram_client
+            from app.telegram.client import get_telegram_client
 
             import asyncio
             main_client = await asyncio.wait_for(get_telegram_client(), timeout=5.0)
@@ -338,5 +338,5 @@ class TelegramSessionManager:
             pass
 
         # Reset singleton so next call re-creates it
-        import backend.app.telegram.client as _client_module
+        import app.telegram.client as _client_module
         _client_module._telegram_client_instance = None
