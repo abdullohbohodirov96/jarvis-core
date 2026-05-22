@@ -36,25 +36,27 @@ _engine: AsyncEngine | None = None
 
 def _create_engine() -> AsyncEngine:
     """Create and return the async engine singleton."""
-    return create_async_engine(
-        settings.DATABASE_URL,
-        # Connection pool configuration
-        pool_size=10,
-        max_overflow=20,
-        pool_pre_ping=True,          # Verify connections before checkout
-        pool_recycle=3600,           # Recycle connections after 1 hour
-        pool_timeout=30,             # Wait up to 30 s for a free connection
-        echo=settings.is_debug,      # Log SQL in debug/dev mode only
-        echo_pool=settings.is_debug,
-        future=True,
-        # asyncpg-specific options
-        connect_args={
-            "server_settings": {
-                "application_name": settings.APP_NAME,
-                "jit": "off",        # Avoid JIT overhead for short queries
+    is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+    kwargs: Dict[str, Any] = {
+        "echo": settings.is_debug,
+        "echo_pool": settings.is_debug,
+        "future": True,
+    }
+    if not is_sqlite:
+        kwargs.update({
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_pre_ping": True,
+            "pool_recycle": 3600,
+            "pool_timeout": 30,
+            "connect_args": {
+                "server_settings": {
+                    "application_name": settings.APP_NAME,
+                    "jit": "off",
+                }
             }
-        },
-    )
+        })
+    return create_async_engine(settings.DATABASE_URL, **kwargs)
 
 
 def get_engine() -> AsyncEngine:

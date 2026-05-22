@@ -496,3 +496,86 @@ async def schedule_message(
         send_at=send_at,
         created_at=now,
     )
+
+
+# ---------------------------------------------------------------------------
+# Settings endpoints
+# ---------------------------------------------------------------------------
+
+
+class TelegramSettings(BaseModel):
+    api_id: int
+    api_hash: str
+    phone: str
+
+
+@router.get(
+    "/settings",
+    response_model=TelegramSettings,
+    summary="Get current Telegram userbot credentials",
+)
+async def get_telegram_settings() -> TelegramSettings:
+    return TelegramSettings(
+        api_id=settings.TELEGRAM_API_ID,
+        api_hash=settings.TELEGRAM_API_HASH,
+        phone=settings.TELEGRAM_PHONE,
+    )
+
+
+@router.post(
+    "/settings",
+    summary="Save Telegram userbot credentials",
+)
+async def save_telegram_settings(payload: TelegramSettings) -> Dict[str, Any]:
+    import os
+    settings.TELEGRAM_API_ID = payload.api_id
+    settings.TELEGRAM_API_HASH = payload.api_hash
+    settings.TELEGRAM_PHONE = payload.phone
+
+    # Attempt to locate and write to the active .env file
+    env_paths = [".env", "backend/.env", "jarvis/.env"]
+    env_path = None
+    for p in env_paths:
+        if os.path.exists(p):
+            env_path = p
+            break
+    if not env_path:
+        env_path = ".env"
+
+    try:
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+        keys_to_update = {
+            "TELEGRAM_API_ID": str(payload.api_id),
+            "TELEGRAM_API_HASH": payload.api_hash,
+            "TELEGRAM_PHONE": payload.phone,
+        }
+
+        updated_lines = []
+        keys_found = set()
+        for line in lines:
+            stripped = line.strip()
+            if "=" in stripped and not stripped.startswith("#"):
+                k, v = stripped.split("=", 1)
+                k = k.strip()
+                if k in keys_to_update:
+                    updated_lines.append(f"{k}={keys_to_update[k]}\n")
+                    keys_found.add(k)
+                    continue
+            updated_lines.append(line)
+
+        for k, v in keys_to_update.items():
+            if k not in keys_found:
+                updated_lines.append(f"{k}={v}\n")
+
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(updated_lines)
+
+        logger.info("telegram_settings_saved_to_env", path=env_path)
+    except Exception as exc:
+        logger.error("telegram_settings_save_failed", error=str(exc))
+
+    return {"status": "success", "message": "Settings updated."}

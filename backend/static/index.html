@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS Web Assistant</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="avatar-ring">
+                    <div class="jarvis-avatar">
+                        <div class="core-dot"></div>
+                        <div class="pulse-ring"></div>
+                    </div>
+                </div>
+                <div class="brand-text">
+                    <h1>JARVIS</h1>
+                    <span class="status-badge connected" id="system-status-pill">
+                        <span class="pulse-indicator"></span> ONLINE
+                    </span>
+                </div>
+            </div>
+            
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="chat">
+                    <i class="fa-solid fa-comment-dots"></i>
+                    <span>Suhbat</span>
+                </button>
+                <button class="nav-item" data-tab="telegram">
+                    <i class="fa-brands fa-telegram"></i>
+                    <span>Telegram</span>
+                </button>
+                <button class="nav-item" data-tab="tasks">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>Vazifalar</span>
+                </button>
+                <button class="nav-item" data-tab="settings">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Sozlamalar</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="system-stats">
+                    <div class="stat-row">
+                        <span>API Status</span>
+                        <span class="stat-val online" id="api-status-dot">●</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Database</span>
+                        <span class="stat-val" id="db-status-dot">○</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Telegram</span>
+                        <span class="stat-val" id="tg-status-dot">○</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- HEADER -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h2 id="current-tab-title">Suhbat Assistant</h2>
+                    <p id="current-tab-subtitle">JARVIS bilan matn va ovoz orqali muloqot qiling</p>
+                </div>
+                <div class="user-profile">
+                    <div class="network-latency" id="network-latency">
+                        <i class="fa-solid fa-signal"></i> <span>-- ms</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- TAB CONTENT: CHAT -->
+            <section class="tab-panel active" id="tab-chat">
+                <div class="chat-container">
+                    <div class="chat-history" id="chat-history">
+                        <div class="message system">
+                            <div class="message-content">
+                                <p>Assalomu alaykum, xo'jayin. Men JARVIS. Sizga qanday yordam bera olaman?</p>
+                                <span class="message-time">Hozir</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-area">
+                        <div class="input-glow-wrapper">
+                            <textarea id="chat-input-text" placeholder="JARVIS ga xabar yozing yoki ovoz yozishni bosing..." rows="1"></textarea>
+                            <div class="input-actions">
+                                <button class="action-btn voice-btn" id="voice-record-btn" title="Ovoz yozish (Mikrofon)">
+                                    <i class="fa-solid fa-microphone"></i>
+                                </button>
+                                <button class="action-btn send-btn" id="chat-send-btn" title="Yuborish">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="voice-status-bar hidden" id="voice-status-bar">
+                            <span class="recording-indicator"></span>
+                            <span id="voice-status-text">Ovoz yozilmoqda...</span>
+                            <span class="voice-timer" id="voice-timer">00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB CONTENT: TELEGRAM -->
+            <section class="tab-panel" id="tab-telegram">
+                <div class="telegram-layout">
+                    <!-- Chats List Sidebar -->
+                    <div class="tg-chats-sidebar">
+                        <div class="sidebar-search">
+                            <i class="fa-solid fa-search"></i>
+                            <input type="text" id="tg-chat-search" placeholder="Chatlarni qidirish...">
+                        </div>
+                        <div class="tg-chats-list" id="tg-chats-list">
+                            <div class="list-placeholder">Telegram ulanmagan yoki yuklanmoqda...</div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Message Area -->
+                    <div class="tg-message-pane">
+                        <div class="tg-pane-header" id="tg-pane-header">
+                            <div class="active-chat-info">
+                                <h3 id="tg-active-chat-name">Chatni tanlang</h3>
+                                <p id="tg-active-chat-status">Habarlarni ko'rish va yuborish uchun dialog ustiga bosing</p>
+                            </div>
+                            <div class="active-chat-actions">
+                                <span class="badge" id="tg-conn-status">Tekshirilmoqda...</span>
+                            </div>
+                        </div>
+
+                        <div class="tg-messages-box" id="tg-messages-box">
+                            <div class="pane-placeholder">
+                                <i class="fa-brands fa-telegram placeholder-icon"></i>
+                                <h3>Telegram Dialoglari</h3>
+                                <p>Suhbatlarni boshqarish uchun chap tomondan dialog tanlang.</p>
+                            </div>
+                        </div>
+
+                        <div class="tg-input-box hidden" id="tg-input-box">
+                            <input type="text" id="tg-message-input" placeholder="Xabaringizni yozing...">
+                            <button id="tg-send-btn"><i class="fa-solid fa-paper-plane"></i> Yuborish</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB CONTENT: TASKS -->
+            <section class="tab-panel" id="tab-tasks">
+                <div class="tasks-layout">
+                    <div class="task-form-panel glass-card">
+                        <h3><i class="fa-solid fa-plus-circle"></i> Yangi Vazifa</h3>
+                        <form id="task-create-form" class="standard-form">
+                            <div class="form-group">
+                                <label for="task-title">Sarlavha</label>
+                                <input type="text" id="task-title" required placeholder="Vazifa nomi...">
+                            </div>
+                            <div class="form-group">
+                                <label for="task-desc">Tavsif</label>
+                                <textarea id="task-desc" placeholder="Tavsif yozing..."></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="task-priority">Muhimlik</label>
+                                    <select id="task-priority">
+                                        <option value="low">Past</option>
+                                        <option value="medium" selected>O'rta</option>
+                                        <option value="high">Yuqori</option>
+                                        <option value="urgent">Kechiktirib bo'lmaydigan</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="task-due">Muddati</label>
+                                    <input type="datetime-local" id="task-due">
+                                </div>
+                            </div>
+                            <button type="submit" class="submit-btn">
+                                <i class="fa-solid fa-plus"></i> Vazifa qo'shish
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="tasks-list-panel">
+                        <div class="tasks-filter-bar">
+                            <button class="filter-btn active" data-filter="all">Hammasi</button>
+                            <button class="filter-btn" data-filter="pending">Kutilmoqda</button>
+                            <button class="filter-btn" data-filter="completed">Bajarilgan</button>
+                        </div>
+                        <div class="tasks-container" id="tasks-container">
+                            <!-- Tasks will be rendered here dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB CONTENT: SETTINGS -->
+            <section class="tab-panel" id="tab-settings">
+                <div class="settings-layout">
+                    <div class="glass-card settings-card">
+                        <h3><i class="fa-brands fa-telegram"></i> Telegram API Sozlamalari</h3>
+                        <p class="section-desc">Telegram account boshqaruvi uchun o'z Telegram API id va API Hash ma'lumotlaringizni kiriting. Buni <a href="https://my.telegram.org/apps" target="_blank" class="accent-link">my.telegram.org</a> saytidan olish mumkin.</p>
+                        
+                        <form id="telegram-settings-form" class="standard-form">
+                            <div class="form-group">
+                                <label for="settings-api-id">TELEGRAM_API_ID</label>
+                                <input type="number" id="settings-api-id" required placeholder="Masalan: 123456">
+                            </div>
+                            <div class="form-group">
+                                <label for="settings-api-hash">TELEGRAM_API_HASH</label>
+                                <input type="text" id="settings-api-hash" required placeholder="Masalan: e7001a5bc...">
+                            </div>
+                            <div class="form-group">
+                                <label for="settings-phone">Telefon Raqam (E.164 formati)</label>
+                                <input type="text" id="settings-phone" required placeholder="Masalan: +998901234567">
+                            </div>
+                            <button type="submit" class="submit-btn"><i class="fa-solid fa-save"></i> Saqlash</button>
+                        </form>
+                    </div>
+
+                    <div class="glass-card settings-card">
+                        <h3><i class="fa-solid fa-key"></i> Telegram Ulanish (Auth)</h3>
+                        <p class="section-desc">API ma'lumotlari saqlangandan keyin, Telegram hisobingizga ulanish uchun quyidagi qadamlarni bajaring.</p>
+                        
+                        <div class="auth-status-box">
+                            <span>Status: </span>
+                            <span class="badge offline" id="auth-status-label">Ulanmagan</span>
+                        </div>
+
+                        <div class="auth-flow-actions">
+                            <!-- Step 1: Request Code -->
+                            <button class="submit-btn" id="auth-send-code-btn">
+                                <i class="fa-solid fa-paper-plane"></i> Kodni so'rash (SMS yuborish)
+                            </button>
+
+                            <!-- Step 2: Verification Code Input (hidden by default) -->
+                            <div class="auth-step-2 hidden" id="auth-step-2">
+                                <div class="form-group">
+                                    <label for="auth-code-input">SMS / Telegram orqali kelgan tasdiqlash kodi</label>
+                                    <input type="text" id="auth-code-input" placeholder="Kodni kiriting...">
+                                </div>
+                                <div class="form-group">
+                                    <label for="auth-password-input">2FA Ikki bosqichli parol (agar yoqilgan bo'lsa)</label>
+                                    <input type="password" id="auth-password-input" placeholder="2FA parolini kiriting...">
+                                </div>
+                                <button class="submit-btn success" id="auth-verify-code-btn">
+                                    <i class="fa-solid fa-check"></i> Ulanishni yakunlash
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Custom App Javascript -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

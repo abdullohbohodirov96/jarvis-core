@@ -247,8 +247,12 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix="/api/v1")
 
     # Static files (frontend build artefacts)
+    import os
+    static_dir = "static"
+    if not os.path.isdir(static_dir) and os.path.isdir("backend/static"):
+        static_dir = "backend/static"
     try:
-        app.mount("/static", StaticFiles(directory="static"), name="static")
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
     except RuntimeError:
         # static directory doesn't exist yet — fine in development
         pass
@@ -256,7 +260,14 @@ def create_app() -> FastAPI:
     # ── Root health check ─────────────────────────────────────────────────────
 
     @app.get("/", tags=["Root"], summary="Root health check")
-    async def root() -> JSONResponse:
+    async def root():
+        import os
+        from fastapi.responses import FileResponse
+        # Check both potential paths for static files
+        paths = ["backend/static/index.html", "static/index.html", "app/static/index.html"]
+        for path in paths:
+            if os.path.exists(path):
+                return FileResponse(path)
         return JSONResponse(
             content={
                 "status": "ok",
