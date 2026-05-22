@@ -1,22 +1,34 @@
 """
-JARVIS SQLAlchemy ORM models.
+JARVIS SQLAlchemy 2.0 async ORM models.
 
-All models inherit from ``core.database.Base`` so that ``init_database()``
-can discover and create their tables automatically.
+Tables:
+  tasks                — user/AI task management
+  conversation_turns   — per-conversation message history
+  telegram_messages    — raw inbound/outbound Telegram messages
+  memories             — long-term agent memory store
+
+Legacy tables kept for backward compatibility:
+  conversations        — conversation session header
+  conversation_messages — legacy per-conversation messages
+  scheduled_messages   — Telegram scheduled-message tracking
 """
 
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Enum as SAEnum,
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
     func,
@@ -27,7 +39,21 @@ from core.database import Base
 
 
 # --------------------------------------------------------------------------- #
-# Enums                                                                         #
+# Helpers                                                                       #
+# --------------------------------------------------------------------------- #
+
+
+def _utcnow() -> datetime:
+    """Return the current UTC time (timezone-aware)."""
+    return datetime.now(tz=timezone.utc)
+
+
+def _new_uuid() -> str:
+    return str(uuid.uuid4())
+
+
+# --------------------------------------------------------------------------- #
+# Legacy enums (kept for backward compat)                                       #
 # --------------------------------------------------------------------------- #
 
 
@@ -36,7 +62,7 @@ class TaskStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
-    DELETED = "deleted"  # soft-delete sentinel
+    DELETED = "deleted"
 
 
 class TaskPriority(str, enum.Enum):
@@ -53,76 +79,200 @@ class MessageRole(str, enum.Enum):
 
 
 # --------------------------------------------------------------------------- #
-# Task                                                                           #
+# Task                                                                          #
 # --------------------------------------------------------------------------- #
 
 
 class Task(Base):
-    """A user-facing task tracked by JARVIS."""
+    """A tracked task / to-do item created by voice, Telegram, or the UI."""
 
     __tablename__ = "tasks"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    title: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    status: Mapped[TaskStatus] = mapped_column(
-        SAEnum(TaskStatus, native_enum=False),
-        default=TaskStatus.PENDING,
-        server_default=TaskStatus.PENDING.value,
-        nullable=False,
+    # UUID stored as a 36-char string so it works with SQLite and Postgres.
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=_new_uuid,
         index=True,
     )
-    priority: Mapped[TaskPriority] = mapped_column(
-        SAEnum(TaskPriority, native_enum=False),
-        default=TaskPriority.MEDIUM,
-        server_default=TaskPriority.MEDIUM.value,
-        nullable=False,
-        index=True,
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # low / medium / high / urgent
+    priority: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="medium"
+    )
+    # pending / in_progress / completed / cancelled
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", index=True
     )
 
-    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reminder_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reminder_sent: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
+    # manual / voice / telegram / ai
+    source: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="manual"
+    )
+
+    tags: Mapped[list[Any]] = mapped_column(JSON, default=list, nullable=False)
+
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
+        default=_utcnow,
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
+        default=_utcnow,
+        onupdate=_utcnow,
         nullable=False,
     )
 
-    # Soft-delete flag (status == DELETED is the canonical check,
-    # but this column lets us filter quickly).
-    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    # Optional source: "voice", "telegram", "api", "ui"
-    source: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    def __repr__(self) -> str:  # pragma: no cover
-        return f"<Task id={self.id} title={self.title!r} status={self.status.value}>"
+    def __repr__(self) -> str:
+        return (
+            f"<Task id={self.id!r} title={self.title!r} "
+            f"status={self.status!r} priority={self.priority!r}>"
+        )
 
 
 # --------------------------------------------------------------------------- #
-# Conversation                                                                   #
+# ConversationTurn                                                               #
+# --------------------------------------------------------------------------- #
+
+
+class ConversationTurn(Base):
+    """A single turn (message) in a multi-turn conversation with the AI."""
+
+    __tablename__ = "conversation_turns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True
+    )
+    # user / assistant / system
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    action_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    action_params: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+
+    tokens_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=_utcnow,
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ConversationTurn id={self.id} "
+            f"conv={self.conversation_id!r} role={self.role!r}>"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# TelegramMessage                                                                #
+# --------------------------------------------------------------------------- #
+
+
+class TelegramMessage(Base):
+    """A raw Telegram message stored for analysis / history."""
+
+    __tablename__ = "telegram_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    telegram_msg_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    chat_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    sender: Mapped[str] = mapped_column(String(255), nullable=False)
+    text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    has_media: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_outgoing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    processed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=_utcnow,
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<TelegramMessage id={self.id} "
+            f"chat_id={self.chat_id} sender={self.sender!r}>"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Memory                                                                         #
+# --------------------------------------------------------------------------- #
+
+
+class Memory(Base):
+    """Long-term factual / preference memory for the JARVIS agent."""
+
+    __tablename__ = "memories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # general / preference / fact / event
+    memory_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="general"
+    )
+
+    # Importance score in [0, 1]; higher = surface more often.
+    importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+
+    tags: Mapped[list[Any]] = mapped_column(JSON, default=list, nullable=False)
+
+    source_conversation_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True
+    )
+
+    access_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_accessed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=_utcnow,
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Memory id={self.id} type={self.memory_type!r} "
+            f"importance={self.importance:.2f}>"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Legacy models (backward compat — do not use in new code)                      #
 # --------------------------------------------------------------------------- #
 
 
 class Conversation(Base):
-    """A conversation session with the JARVIS AI assistant."""
+    """Legacy conversation session header (kept for DB compat)."""
 
     __tablename__ = "conversations"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -139,12 +289,12 @@ class Conversation(Base):
         order_by="ConversationMessage.created_at",
     )
 
-    def __repr__(self) -> str:  # pragma: no cover
+    def __repr__(self) -> str:
         return f"<Conversation id={self.id!r}>"
 
 
 class ConversationMessage(Base):
-    """A single message within a Conversation."""
+    """Legacy single message within a Conversation (kept for DB compat)."""
 
     __tablename__ = "conversation_messages"
 
@@ -156,52 +306,46 @@ class ConversationMessage(Base):
         index=True,
     )
     role: Mapped[MessageRole] = mapped_column(
-        SAEnum(MessageRole, native_enum=False),
-        nullable=False,
+        SAEnum(MessageRole, native_enum=False), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    tokens_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tokens_used: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     conversation: Mapped[Conversation] = relationship(
         "Conversation", back_populates="messages"
     )
 
-    def __repr__(self) -> str:  # pragma: no cover
+    def __repr__(self) -> str:
         return (
             f"<ConversationMessage id={self.id} role={self.role.value} "
             f"conversation_id={self.conversation_id!r}>"
         )
 
 
-# --------------------------------------------------------------------------- #
-# ScheduledMessage                                                               #
-# --------------------------------------------------------------------------- #
-
-
 class ScheduledMessage(Base):
-    """A Telegram message scheduled for future delivery."""
+    """Legacy scheduled Telegram message (kept for DB compat)."""
 
     __tablename__ = "scheduled_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     chat_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    send_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    send_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
     sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    def __repr__(self) -> str:  # pragma: no cover
+    def __repr__(self) -> str:
         return (
             f"<ScheduledMessage id={self.id} chat_id={self.chat_id!r} "
             f"send_at={self.send_at!r} sent={self.sent}>"
