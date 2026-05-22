@@ -64,7 +64,7 @@ class TaskResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: str
     title: str
     description: str | None
     status: TaskStatus
@@ -82,7 +82,7 @@ class TaskResponse(BaseModel):
 # --------------------------------------------------------------------------- #
 
 
-async def _get_task_or_404(task_id: int, db: AsyncSession) -> Task:
+async def _get_task_or_404(task_id: str, db: AsyncSession) -> Task:
     """Fetch a non-deleted task by ID or raise HTTP 404."""
     result = await db.execute(
         select(Task).where(Task.id == task_id, Task.is_deleted.is_(False))
@@ -129,7 +129,7 @@ async def create_task(
 
     await event_bus.publish(
         EventType.TASK_CREATED,
-        {"task_id": task.id, "title": task.title, "priority": task.priority.value},
+        {"task_id": task.id, "title": task.title, "priority": task.priority},
     )
 
     return task
@@ -210,7 +210,7 @@ async def search_tasks(
     summary="Get a task by ID",
 )
 async def get_task(
-    task_id: int,
+    task_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     return await _get_task_or_404(task_id, db)
@@ -227,7 +227,7 @@ async def get_task(
     summary="Update a task",
 )
 async def update_task(
-    task_id: int,
+    task_id: str,
     payload: TaskUpdate,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
@@ -251,19 +251,20 @@ async def update_task(
 
 @router.delete(
     "/{task_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_200_OK,
     summary="Soft-delete a task",
 )
 async def delete_task(
-    task_id: int,
+    task_id: str,
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> dict:
     """Mark a task as deleted (soft delete)."""
     task = await _get_task_or_404(task_id, db)
     task.is_deleted = True
     task.status = TaskStatus.DELETED
     await db.flush()
     log.info("Task soft-deleted: id={id}", id=task.id)
+    return {"deleted": True, "id": task_id}
 
 
 # --------------------------------------------------------------------------- #
@@ -277,7 +278,7 @@ async def delete_task(
     summary="Mark a task complete",
 )
 async def complete_task(
-    task_id: int,
+    task_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """Set task status to COMPLETED and record the completion timestamp."""

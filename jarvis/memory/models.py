@@ -124,6 +124,10 @@ class Task(Base):
 
     tags: Mapped[list[Any]] = mapped_column(JSON, default=list, nullable=False)
 
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, index=True
+    )
+
     completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
