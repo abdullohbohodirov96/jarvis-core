@@ -13,7 +13,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.ai.tools.base import BaseTool
+from app.ai.tools.base import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class StoreMemoryTool(BaseTool):
                 memory_id = getattr(memory, "id", None)
             else:
                 # Direct DB persistence fallback
-                from backend.app.models.memory import Memory  # type: ignore[import]
+                from app.models.memory import Memory  # type: ignore[import]
 
                 memory_obj = Memory(
                     user_id=self._user_id,
@@ -232,7 +232,7 @@ class SearchMemoryTool(BaseTool):
                 ]
             else:
                 from sqlalchemy import select
-                from backend.app.models.memory import Memory  # type: ignore[import]
+                from app.models.memory import Memory  # type: ignore[import]
 
                 pattern = f"%{query}%"
                 stmt = (
@@ -333,7 +333,7 @@ class ListRecentMemoriesTool(BaseTool):
 
         try:
             from sqlalchemy import select
-            from backend.app.models.memory import Memory  # type: ignore[import]
+            from app.models.memory import Memory  # type: ignore[import]
 
             stmt = select(Memory).where(
                 Memory.user_id == self._user_id,

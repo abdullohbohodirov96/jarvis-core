@@ -16,7 +16,7 @@ from typing import Any
 
 from celery.utils.log import get_task_logger
 
-from backend.app.workers.celery_app import get_celery_app
+from app.workers.celery_app import get_celery_app
 
 celery_app = get_celery_app()
 logger = get_task_logger(__name__)
@@ -42,8 +42,8 @@ def _run_async(coro: Any) -> Any:
 async def _get_all_user_ids() -> list[str]:
     try:
         from sqlalchemy import select
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.user import User
+        from app.database.connection import AsyncSessionLocal
+        from app.models.user import User
 
         async with AsyncSessionLocal() as session:
             stmt = select(User.id).where(
@@ -109,7 +109,7 @@ async def _async_generate_weekly_report(user_id: str) -> dict[str, Any]:
             results[uid] = {"generated": True, "report_length": len(report)}
             # Deliver via Telegram if possible
             try:
-                from backend.app.workers.tasks.telegram_tasks import (
+                from app.workers.tasks.telegram_tasks import (
                     _dispatch_telegram_message,
                 )
                 await _dispatch_telegram_message(uid, None, report)
@@ -133,8 +133,8 @@ async def _build_weekly_report_for_user(user_id: str) -> str:
     # Tasks stats
     try:
         from sqlalchemy import select, and_, func
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.task import Task  # type: ignore[import]
+        from app.database.connection import AsyncSessionLocal
+        from app.models.task import Task  # type: ignore[import]
         import uuid
 
         async with AsyncSessionLocal() as session:
@@ -184,7 +184,7 @@ async def _build_weekly_report_for_user(user_id: str) -> str:
 
     # AI narrative
     try:
-        from backend.app.ai.client import get_openai_client
+        from app.ai.client import get_openai_client
 
         ai = get_openai_client()
         context = "\n".join(lines)
@@ -244,10 +244,10 @@ async def _async_summarize_long_conversation(
 ) -> dict[str, Any]:
     try:
         from sqlalchemy import select
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.conversation import Conversation
-        from backend.app.models.message import Message
-        from backend.app.ai.client import get_openai_client
+        from app.database.connection import AsyncSessionLocal
+        from app.models.conversation import Conversation
+        from app.models.message import Message
+        from app.ai.client import get_openai_client
         import uuid
 
         async with AsyncSessionLocal() as session:
@@ -356,7 +356,7 @@ async def _async_send_morning_briefing(user_id: str) -> dict[str, Any]:
         try:
             briefing = await _build_morning_briefing_for_user(uid)
             try:
-                from backend.app.workers.tasks.telegram_tasks import (
+                from app.workers.tasks.telegram_tasks import (
                     _dispatch_telegram_message,
                 )
                 await _dispatch_telegram_message(uid, None, briefing)
@@ -387,8 +387,8 @@ async def _build_morning_briefing_for_user(user_id: str) -> str:
     # Tasks due today
     try:
         from sqlalchemy import select, and_
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.task import Task  # type: ignore[import]
+        from app.database.connection import AsyncSessionLocal
+        from app.models.task import Task  # type: ignore[import]
         import uuid
 
         async with AsyncSessionLocal() as session:
@@ -441,8 +441,8 @@ async def _build_morning_briefing_for_user(user_id: str) -> str:
     # Recent memories
     try:
         from sqlalchemy import select, and_
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.memory import Memory  # type: ignore[import]
+        from app.database.connection import AsyncSessionLocal
+        from app.models.memory import Memory  # type: ignore[import]
         import uuid
 
         since = now - timedelta(hours=12)

@@ -11,7 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.models.memory import MemoryType
+from app.models.memory import MemoryType
 
 
 # ---------------------------------------------------------------------------

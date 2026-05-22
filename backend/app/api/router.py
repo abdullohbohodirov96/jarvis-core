@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.app.api.v1.endpoints.health import router as health_router
-from backend.app.api.v1.endpoints.chat import router as chat_router
-from backend.app.api.v1.endpoints.tasks import router as tasks_router
-from backend.app.api.v1.endpoints.voice import router as voice_router
-from backend.app.api.v1.endpoints.telegram import router as telegram_router
-from backend.app.api.v1.endpoints.memory import router as memory_router
+from app.api.v1.endpoints.health import router as health_router
+from app.api.v1.endpoints.chat import router as chat_router
+from app.api.v1.endpoints.tasks import router as tasks_router
+from app.api.v1.endpoints.voice import router as voice_router
+from app.api.v1.endpoints.telegram import router as telegram_router
+from app.api.v1.endpoints.memory import router as memory_router
 
 api_router = APIRouter()
 

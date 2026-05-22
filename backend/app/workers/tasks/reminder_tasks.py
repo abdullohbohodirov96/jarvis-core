@@ -18,7 +18,7 @@ from typing import Any
 from celery import shared_task
 from celery.utils.log import get_task_logger
 
-from backend.app.workers.celery_app import get_celery_app
+from app.workers.celery_app import get_celery_app
 
 celery_app = get_celery_app()
 logger = get_task_logger(__name__)
@@ -44,7 +44,7 @@ def _run_async(coro: Any) -> Any:
 
 async def _get_db_session():
     """Create and return an async DB session."""
-    from backend.app.database.connection import AsyncSessionLocal
+    from app.database.connection import AsyncSessionLocal
     return AsyncSessionLocal()
 
 
@@ -82,11 +82,11 @@ async def _async_check_and_send_reminders() -> dict[str, Any]:
 
     try:
         from sqlalchemy import select, and_
-        from backend.app.database.connection import AsyncSessionLocal
+        from app.database.connection import AsyncSessionLocal
 
         # Lazy import to avoid circular deps
         try:
-            from backend.app.models.task import Task  # type: ignore[import]
+            from app.models.task import Task  # type: ignore[import]
         except ImportError:
             logger.warning("Task model not available; skipping reminder scan.")
             return {"sent": 0, "errors": 0, "skipped": True}
@@ -175,8 +175,8 @@ async def _send_task_reminder_standalone(
 
     try:
         from sqlalchemy import select
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.task import Task  # type: ignore[import]
+        from app.database.connection import AsyncSessionLocal
+        from app.models.task import Task  # type: ignore[import]
 
         async with AsyncSessionLocal() as session:
             return await _send_task_reminder_async(task_id, session)
@@ -194,8 +194,8 @@ async def _send_task_reminder_async(
     import uuid
 
     try:
-        from backend.app.models.task import Task  # type: ignore[import]
-        from backend.app.models.user import User
+        from app.models.task import Task  # type: ignore[import]
+        from app.models.user import User
 
         stmt = select(Task).where(Task.id == uuid.UUID(task_id))
         result = await session.execute(stmt)
@@ -265,9 +265,9 @@ async def _async_check_overdue_tasks() -> dict[str, Any]:
 
     try:
         from sqlalchemy import select, and_
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.task import Task  # type: ignore[import]
-        from backend.app.models.user import User
+        from app.database.connection import AsyncSessionLocal
+        from app.models.task import Task  # type: ignore[import]
+        from app.models.user import User
 
         async with AsyncSessionLocal() as session:
             # Look for tasks past due date that are still open
@@ -347,8 +347,8 @@ async def _async_send_daily_task_summary() -> dict[str, Any]:
 
     try:
         from sqlalchemy import select
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.user import User
+        from app.database.connection import AsyncSessionLocal
+        from app.models.user import User
 
         async with AsyncSessionLocal() as session:
             stmt = select(User).where(

@@ -12,7 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.models.task import TaskPriority, TaskSource, TaskStatus
+from app.models.task import TaskPriority, TaskSource, TaskStatus
 
 
 # ---------------------------------------------------------------------------

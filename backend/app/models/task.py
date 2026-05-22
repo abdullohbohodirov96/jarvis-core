@@ -18,11 +18,11 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import TimestampedBase
+from app.models.base import TimestampedBase
 
 if TYPE_CHECKING:
-    from backend.app.models.message import Message
-    from backend.app.models.user import User
+    from app.models.message import Message
+    from app.models.user import User
 
 
 class TaskStatus(str, enum.Enum):

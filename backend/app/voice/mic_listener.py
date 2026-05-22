@@ -276,7 +276,7 @@ class MicrophoneListener:
             if not audio:
                 return None
             # Convert raw PCM to WAV bytes
-            from backend.app.voice.audio_processor import AudioProcessor
+            from app.voice.audio_processor import AudioProcessor
             return AudioProcessor.numpy_to_bytes(
                 np.frombuffer(audio, dtype=np.int16),
                 self._sample_rate,
@@ -311,7 +311,7 @@ class MicrophoneListener:
                         None, self._record_until_silence, 10.0
                     )
                     if audio and not self._is_silent(audio[:self._chunk_samples * 2]):
-                        from backend.app.voice.audio_processor import AudioProcessor
+                        from app.voice.audio_processor import AudioProcessor
                         wav_bytes = AudioProcessor.numpy_to_bytes(
                             np.frombuffer(audio, dtype=np.int16),
                             self._sample_rate,
@@ -346,7 +346,7 @@ class MicrophoneListener:
 
         wake_words_lower = [w.lower() for w in wake_words]
 
-        from backend.app.voice.stt import get_stt_engine
+        from app.voice.stt import get_stt_engine
 
         stt = get_stt_engine()
         deadline = time.monotonic() + 60.0
@@ -375,7 +375,7 @@ class MicrophoneListener:
                         )
 
                     audio_data = b"".join(frames)
-                    from backend.app.voice.audio_processor import AudioProcessor
+                    from app.voice.audio_processor import AudioProcessor
                     wav_bytes = AudioProcessor.numpy_to_bytes(
                         np.frombuffer(audio_data, dtype=np.int16),
                         self._sample_rate,

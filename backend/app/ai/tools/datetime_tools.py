@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.ai.tools.base import BaseTool
+from app.ai.tools.base import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,7 @@ class SetReminderTool(BaseTool):
         human_delta = _format_timedelta(delta)
 
         try:
-            from backend.app.models.reminder import Reminder  # type: ignore[import]
+            from app.models.reminder import Reminder  # type: ignore[import]
 
             reminder = Reminder(
                 user_id=self._user_id,

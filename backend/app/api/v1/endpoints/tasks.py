@@ -21,9 +21,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field, model_validator
 
-from backend.app.core.exceptions import AIException, NotFoundException, ValidationException
-from backend.app.core.logging_config import get_logger
-from backend.app.utils.helpers import generate_id, now_utc
+from app.core.exceptions import AIException, NotFoundException, ValidationException
+from app.core.logging_config import get_logger
+from app.utils.helpers import generate_id, now_utc
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -80,7 +80,7 @@ class TaskUpdate(BaseModel):
 
 
 class TaskOut(BaseModel):
-    task_id: str
+    id: str
     title: str
     description: Optional[str]
     priority: TaskPriority
@@ -124,7 +124,7 @@ _tasks: Dict[str, Dict[str, Any]] = {}
 
 def _task_to_out(t: Dict[str, Any]) -> TaskOut:
     return TaskOut(
-        task_id=t["task_id"],
+        id=t["task_id"],
         title=t["title"],
         description=t.get("description"),
         priority=TaskPriority(t["priority"]),
@@ -363,7 +363,7 @@ async def extract_tasks(payload: ExtractTasksRequest) -> ExtractTasksResponse:
     raw_json: str = "[]"
     try:
         from openai import AsyncOpenAI  # type: ignore
-        from backend.app.core.config import get_settings
+        from app.core.config import get_settings
 
         cfg = get_settings()
         client = AsyncOpenAI(api_key=cfg.OPENAI_API_KEY)
@@ -395,7 +395,7 @@ async def extract_tasks(payload: ExtractTasksRequest) -> ExtractTasksResponse:
             details={"error": str(exc)},
         ) from exc
 
-    from backend.app.utils.helpers import extract_json_from_text
+    from app.utils.helpers import extract_json_from_text
 
     parsed = extract_json_from_text(raw_json)
     if not isinstance(parsed, list):

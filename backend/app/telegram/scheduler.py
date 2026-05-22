@@ -18,12 +18,12 @@ from uuid import UUID
 
 from sqlalchemy import and_, select, text as sa_text
 
-from backend.app.core.exceptions import NotFoundException, TelegramException
+from app.core.exceptions import NotFoundException, TelegramException
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from backend.app.telegram.client import TelegramClientManager
+    from app.telegram.client import TelegramClientManager
 
 logger = logging.getLogger(__name__)
 

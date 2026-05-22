@@ -18,7 +18,7 @@ from sqlalchemy import Boolean, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.database.connection import Base
+from app.database.connection import Base
 
 
 def _utcnow() -> datetime:

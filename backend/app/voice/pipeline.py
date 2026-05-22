@@ -136,8 +136,8 @@ class VoicePipeline:
     ) -> None:
         """
         Args:
-            stt:     WhisperSTT instance (from backend.app.voice.stt).
-            tts:     TTSManager instance (from backend.app.voice.tts).
+            stt:     WhisperSTT instance (from app.voice.stt).
+            tts:     TTSManager instance (from app.voice.tts).
             agent:   AI agent / conversation manager with an
                      ``ask(user_id, text)`` coroutine that returns a str.
             user_id: JARVIS user identifier string.
@@ -235,7 +235,7 @@ class VoicePipeline:
         # Convert non-WAV formats via AudioProcessor
         suffix = path.suffix.lstrip(".").lower()
         if suffix != "wav":
-            from backend.app.voice.audio_processor import AudioProcessor
+            from app.voice.audio_processor import AudioProcessor
             audio_bytes = AudioProcessor.convert_to_wav(audio_bytes, suffix)
 
         return await self.process_voice_input(audio_bytes)
@@ -526,7 +526,7 @@ class VoicePipeline:
         """Create a reminder in the task system (best-effort)."""
         try:
             # Attempt to delegate to Celery task queue
-            from backend.app.workers.celery_app import get_celery_app
+            from app.workers.celery_app import get_celery_app
             app = get_celery_app()
             app.send_task(
                 "backend.app.workers.tasks.reminder_tasks.send_task_reminder",
@@ -544,7 +544,7 @@ class VoicePipeline:
     ) -> dict[str, Any]:
         """Queue a Telegram message via Celery."""
         try:
-            from backend.app.workers.celery_app import get_celery_app
+            from app.workers.celery_app import get_celery_app
             app = get_celery_app()
             app.send_task(
                 "backend.app.workers.tasks.telegram_tasks.send_telegram_message",

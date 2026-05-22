@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.ai.tools.base import BaseTool
+from app.ai.tools.base import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class CreateTaskTool(BaseTool):
 
         try:
             # Dynamic import to avoid circular deps at module load time
-            from backend.app.models.task import Task  # type: ignore[import]
+            from app.models.task import Task  # type: ignore[import]
 
             task = Task(
                 user_id=self._user_id,
@@ -192,7 +192,7 @@ class ListTasksTool(BaseTool):
         include_completed: bool = params.get("include_completed", False)
 
         try:
-            from backend.app.models.task import Task  # type: ignore[import]
+            from app.models.task import Task  # type: ignore[import]
 
             stmt = select(Task).where(Task.user_id == self._user_id)
 
@@ -287,7 +287,7 @@ class UpdateTaskTool(BaseTool):
         task_id: int = int(params["task_id"])
 
         try:
-            from backend.app.models.task import Task  # type: ignore[import]
+            from app.models.task import Task  # type: ignore[import]
 
             stmt = select(Task).where(Task.id == task_id, Task.user_id == self._user_id)
             result = await self._db.execute(stmt)
@@ -358,7 +358,7 @@ class CompleteTaskTool(BaseTool):
         note: str = params.get("completion_note", "")
 
         try:
-            from backend.app.models.task import Task  # type: ignore[import]
+            from app.models.task import Task  # type: ignore[import]
 
             stmt = select(Task).where(Task.id == task_id, Task.user_id == self._user_id)
             result = await self._db.execute(stmt)
@@ -440,7 +440,7 @@ class SearchTasksTool(BaseTool):
             return {"success": False, "error": "Query cannot be empty.", "tasks": []}
 
         try:
-            from backend.app.models.task import Task  # type: ignore[import]
+            from app.models.task import Task  # type: ignore[import]
 
             pattern = f"%{query}%"
             stmt = (

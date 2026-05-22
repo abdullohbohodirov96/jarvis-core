@@ -17,7 +17,7 @@ from typing import Any
 
 from celery.utils.log import get_task_logger
 
-from backend.app.workers.celery_app import get_celery_app
+from app.workers.celery_app import get_celery_app
 
 celery_app = get_celery_app()
 logger = get_task_logger(__name__)
@@ -73,8 +73,8 @@ async def _async_process_scheduled_messages() -> dict[str, Any]:
 
     try:
         from sqlalchemy import select, and_
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.scheduled_message import ScheduledMessage  # type: ignore[import]
+        from app.database.connection import AsyncSessionLocal
+        from app.models.scheduled_message import ScheduledMessage  # type: ignore[import]
 
         async with AsyncSessionLocal() as session:
             stmt = select(ScheduledMessage).where(
@@ -161,10 +161,10 @@ async def _async_sync_telegram_dialogs(user_id: str) -> dict[str, Any]:
 
     try:
         # Import Telegram client if available
-        from backend.app.telegram import get_telegram_client  # type: ignore[import]
+        from app.telegram import get_telegram_client  # type: ignore[import]
         from sqlalchemy import select
-        from backend.app.database.connection import AsyncSessionLocal
-        from backend.app.models.telegram_chat import TelegramChat  # type: ignore[import]
+        from app.database.connection import AsyncSessionLocal
+        from app.models.telegram_chat import TelegramChat  # type: ignore[import]
         import uuid
 
         client = await get_telegram_client(user_id)
@@ -258,8 +258,8 @@ async def _async_detect_tasks_from_chat(
     detected = 0
 
     try:
-        from backend.app.telegram import get_telegram_client  # type: ignore[import]
-        from backend.app.ai.client import get_openai_client
+        from app.telegram import get_telegram_client  # type: ignore[import]
+        from app.ai.client import get_openai_client
 
         since = datetime.now(timezone.utc) - timedelta(hours=hours_back)
 
@@ -297,8 +297,8 @@ async def _async_detect_tasks_from_chat(
 
         if tasks_data:
             from sqlalchemy import select
-            from backend.app.database.connection import AsyncSessionLocal
-            from backend.app.models.task import Task  # type: ignore[import]
+            from app.database.connection import AsyncSessionLocal
+            from app.models.task import Task  # type: ignore[import]
             import uuid
 
             async with AsyncSessionLocal() as session:
@@ -388,8 +388,8 @@ async def _dispatch_telegram_message(
         # Look up the user's own Telegram ID from DB
         try:
             from sqlalchemy import select
-            from backend.app.database.connection import AsyncSessionLocal
-            from backend.app.models.user import User
+            from app.database.connection import AsyncSessionLocal
+            from app.models.user import User
             import uuid
 
             async with AsyncSessionLocal() as session:
@@ -410,7 +410,7 @@ async def _dispatch_telegram_message(
         return {"sent": False, "reason": "no_chat_id"}
 
     try:
-        from backend.app.telegram import get_telegram_client  # type: ignore[import]
+        from app.telegram import get_telegram_client  # type: ignore[import]
 
         client = await get_telegram_client(user_id)
         await client.send_message(int(chat_id), text)
