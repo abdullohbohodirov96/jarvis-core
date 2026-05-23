@@ -437,16 +437,20 @@ async def on_direct_chat_message(message: Message, db_session):
 async def on_callback_todo_complete(callback: CallbackQuery, db_session):
     todo_id = int(callback.data.split(":")[1])
     todo = await db_ops.complete_todo(db_session, callback.from_user.id, todo_id, is_done=True)
-    
+
     if todo:
+        todo_title = todo.title
         await db_session.commit()
-        await callback.answer(f"✅ Vazifa bajarildi: '{todo.title}'")
-        
-        # Refresh message
+        await callback.answer(f"✅ Vazifa bajarildi: '{todo_title}'")
+
         todos = await db_ops.get_todos(db_session, callback.from_user.id)
-        text = await render_tasks_message(db_session, callback.from_user.id)
-        reply_markup = get_tasks_keyboard(todos)
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        text = render_board_message(todos)
+        reply_markup = get_board_keyboard(todos)
+        try:
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        except Exception:
+            pass
+        await update_pinned_board(bot, callback.from_user.id, db_session)
     else:
         await callback.answer("❌ Vazifa topilmadi.", show_alert=True)
 
@@ -454,16 +458,19 @@ async def on_callback_todo_complete(callback: CallbackQuery, db_session):
 async def on_callback_todo_delete(callback: CallbackQuery, db_session):
     todo_id = int(callback.data.split(":")[1])
     success = await db_ops.delete_todo(db_session, callback.from_user.id, todo_id)
-    
+
     if success:
         await db_session.commit()
         await callback.answer("🗑 Vazifa muvaffaqiyatli o'chirildi.")
-        
-        # Refresh message
+
         todos = await db_ops.get_todos(db_session, callback.from_user.id)
-        text = await render_tasks_message(db_session, callback.from_user.id)
-        reply_markup = get_tasks_keyboard(todos)
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        text = render_board_message(todos)
+        reply_markup = get_board_keyboard(todos)
+        try:
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        except Exception:
+            pass
+        await update_pinned_board(bot, callback.from_user.id, db_session)
     else:
         await callback.answer("❌ Vazifa topilmadi.", show_alert=True)
 
@@ -488,17 +495,19 @@ async def on_callback_todo_set_pri(callback: CallbackQuery, db_session):
     parts = callback.data.split(":")
     todo_id = int(parts[1])
     priority = parts[2]
-    
+
     todo = await db_ops.update_todo(db_session, callback.from_user.id, todo_id, {"priority": priority})
     if todo:
         await db_session.commit()
         await callback.answer(f"🔥 Ustuvorlik {priority.upper()} qilib o'zgartirildi!")
-        
-        # Refresh message
+
         todos = await db_ops.get_todos(db_session, callback.from_user.id)
-        text = await render_tasks_message(db_session, callback.from_user.id)
-        reply_markup = get_tasks_keyboard(todos)
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        text = render_board_message(todos)
+        reply_markup = get_board_keyboard(todos)
+        try:
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        except Exception:
+            pass
     else:
         await callback.answer("❌ Xatolik yuz berdi.", show_alert=True)
 

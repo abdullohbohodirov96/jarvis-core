@@ -232,26 +232,29 @@ class NexusUserbot:
                             follow_up_at=follow_up_time,
                         )
                         await db.commit()
-                        logger.success(f"Successfully auto-extracted task from chat: '{todo.title}'")
+                        logger.info(f"Successfully auto-extracted task from chat: '{todo.title}'")
 
                         # Notify the owner via our Main Aiogram Bot!
-                        from telegram.bot import bot, update_pinned_board
-                        if bot:
-                            badge = "🔴 <b>Sizning va'dangiz aniqlandi:</b>" if is_outgoing else "🔵 <b>Sizga so'rov yuborildi:</b>"
-                            notify_text = (
-                                f"{badge}\n\n"
-                                f"📝 <b>{todo.title}</b>\n"
-                                f"📋 {todo.description}\n\n"
-                                f"<i>Men ushbu vazifani NEXUS ro'yxatingizga avtomatik ravishda qo'shib qo'ydim.</i>"
-                            )
-                            await bot.send_message(
-                                chat_id=settings.OWNER_ID,
-                                text=notify_text,
-                                parse_mode="HTML"
-                            )
-                            from database.connection import AsyncSessionLocal
-                            async with AsyncSessionLocal() as board_db:
-                                await update_pinned_board(bot, settings.OWNER_ID, board_db)
+                        try:
+                            from telegram.bot import bot, update_pinned_board
+                            if bot:
+                                badge = "🔴 <b>Sizning va'dangiz aniqlandi:</b>" if is_outgoing else "🔵 <b>Sizga so'rov yuborildi:</b>"
+                                notify_text = (
+                                    f"{badge}\n\n"
+                                    f"📝 <b>{todo.title}</b>\n"
+                                    f"📋 {todo.description}\n\n"
+                                    f"<i>Men ushbu vazifani NEXUS ro'yxatingizga avtomatik ravishda qo'shib qo'ydim.</i>"
+                                )
+                                await bot.send_message(
+                                    chat_id=settings.OWNER_ID,
+                                    text=notify_text,
+                                    parse_mode="HTML"
+                                )
+                                from database.connection import AsyncSessionLocal
+                                async with AsyncSessionLocal() as board_db:
+                                    await update_pinned_board(bot, settings.OWNER_ID, board_db)
+                        except Exception as notify_err:
+                            logger.warning(f"Failed to send task notification: {notify_err}")
             except Exception as e:
                 logger.error(f"Error in Userbot message listener: {e}")
 
