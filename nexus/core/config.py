@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 from functools import lru_cache
 
 class Settings(BaseSettings):
@@ -20,6 +21,19 @@ class Settings(BaseSettings):
 
     # ── Database ──────────────────────────────────────────────────────────────
     DATABASE_URL: str
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def fix_db_url(cls, v: str) -> str:
+        """Auto-convert postgres:// or postgresql:// -> postgresql+asyncpg://"""
+        if not isinstance(v, str):
+            return v
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                # Don't replace if it's already using asyncpg
+                if "postgresql+asyncpg://" not in v:
+                    return v.replace(prefix, "postgresql+asyncpg://", 1)
+        return v
 
     # ── OpenAI ────────────────────────────────────────────────────────────────
     OPENAI_API_KEY: str
