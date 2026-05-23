@@ -98,6 +98,23 @@ async def init_db() -> None:
     logger.info("Initialising database tables…")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        
+        # Ensure analyzed_chats column exists in users table
+        try:
+            from sqlalchemy import text
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS analyzed_chats JSONB NOT NULL DEFAULT '[]';"))
+            logger.success("Ensured column 'analyzed_chats' exists in 'users' table.")
+        except Exception as e:
+            logger.warning(f"Could not automatically add 'analyzed_chats' column: {e}")
+
+        # Ensure app_id column exists in user_integrations table
+        try:
+            from sqlalchemy import text
+            await conn.execute(text("ALTER TABLE user_integrations ADD COLUMN IF NOT EXISTS app_id VARCHAR(64);"))
+            logger.success("Ensured column 'app_id' exists in 'user_integrations' table.")
+        except Exception as e:
+            logger.warning(f"Could not automatically add 'app_id' column: {e}")
+            
     logger.success("Database tables ready.")
 
 

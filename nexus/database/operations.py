@@ -26,7 +26,7 @@ def decrypt_credentials(credentials: dict[str, Any], schema: list[dict] | None =
     Decrypt values from the credentials dictionary.
     If a schema is provided, only decrypt fields marked as secret.
     """
-    decrypted = {}
+    encrypted = {}
     for k, v in credentials.items():
         if isinstance(v, str):
             # Check if this field should be secret (masked in API response)
@@ -37,10 +37,10 @@ def decrypt_credentials(credentials: dict[str, Any], schema: list[dict] | None =
                         is_secret = item.get("secret", True)
                         break
             # We decrypt it
-            decrypted[k] = decrypt(v)
+            encrypted[k] = decrypt(v)
         else:
-            decrypted[k] = v
-    return decrypted
+            encrypted[k] = v
+    return encrypted
 
 # ── User Operations ──
 
@@ -61,7 +61,8 @@ async def get_or_create_user(db: AsyncSession, tg_id: int, username: str | None 
             tg_id=tg_id,
             username=username.lstrip("@") if username else None,
             is_allowed=is_owner, # Owner allowed immediately
-            is_admin=is_owner
+            is_admin=is_owner,
+            analyzed_chats=[]
         )
         db.add(user)
         await db.flush()
@@ -90,6 +91,23 @@ async def revoke_user(db: AsyncSession, username: str) -> User | None:
 async def get_pending_users(db: AsyncSession) -> list[User]:
     result = await db.execute(select(User).where(User.is_allowed == False).order_by(User.created_at.desc()))
     return list(result.scalars().all())
+
+async def toggle_chat_analysis(db: AsyncSession, tg_id: int, chat_id: int, is_active: bool) -> list[int]:
+    user = await get_user(db, tg_id)
+    if not user:
+        return []
+    
+    chats = list(user.analyzed_chats or [])
+    if is_active:
+        if chat_id not in chats:
+            chats.append(chat_id)
+    else:
+        if chat_id in chats:
+            chats.remove(chat_id)
+            
+    user.analyzed_chats = chats
+    await db.flush()
+    return chats
 
 # ── Integration Operations ──
 

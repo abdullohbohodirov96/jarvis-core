@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from database.connection import get_db, init_db, check_db_connection
 import database.operations as db_ops
+from telegram.userbot import NexusUserbot
 from utils.logger import logger
 
 _start_time: float = time.monotonic()
@@ -104,6 +105,23 @@ class TodoUpdateRequest(BaseModel):
     priority: Optional[str] = None
     due_date: Optional[str] = None # ISO format string or empty string to unset
 
+# Userbot API Models
+class UserbotConnectRequest(BaseModel):
+    tg_id: int
+    phone: str
+
+class UserbotVerifyRequest(BaseModel):
+    tg_id: int
+    phone: str
+    phone_code_hash: str
+    code: str
+    password: Optional[str] = None
+
+class ToggleChatRequest(BaseModel):
+    tg_id: int
+    chat_id: int
+    is_active: bool
+
 # ── Lifespan for FastAPI ──
 
 @asynccontextmanager
@@ -138,6 +156,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.error("Telegram bot init failed: {}", exc)
 
+    # Initialize Telegram Userbot (Telethon listener)
+    try:
+        userbot = NexusUserbot()
+        if await userbot.is_connected():
+            asyncio.create_task(userbot.start_listening())
+            logger.success("Userbot connected and listener active on startup.")
+    except Exception as exc:
+        logger.error("Userbot startup failed: {}", exc)
+
     logger.success("{} startup complete.", settings.PROJECT_NAME)
 
     yield
@@ -145,6 +172,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Shutting down {}…", settings.PROJECT_NAME)
     from telegram.bot import stop_bot
     await stop_bot()
+    
+    # Disconnect Userbot
+    try:
+        await NexusUserbot().disconnect()
+    except Exception:
+        pass
+
     if _telegram_task and not _telegram_task.done():
         _telegram_task.cancel()
         try:
@@ -460,7 +494,121 @@ async def delete_todo(
         logger.exception("Delete todo failed: {}", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
-# ── 5. System Health Check ──
+# ── 5. Userbot Controls API ──
+
+@app.get("/api/telegram/status")
+async def get_userbot_status(
+    tg_id: int = Query(..., description="Telegram ID of the user"),
+    db: AsyncSession = Depends(get_db)
+):
+    user = await get_authorized_user(tg_id, db)
+    userbot = NexusUserbot()
+    is_ok = await userbot.is_connected()
+    
+    me_info = None
+    if is_ok:
+        me = await userbot.get_me()
+        if me:
+            me_info = {
+                "id": me.id,
+                "first_name": me.first_name,
+                "last_name": me.last_name,
+                "username": me.username,
+                "phone": me.phone
+            }
+            
+    return {
+        "connected": is_ok,
+        "me": me_info,
+        "analyzed_chats": user.analyzed_chats or []
+    }
+
+@app.post("/api/telegram/connect")
+async def connect_userbot(req: UserbotConnectRequest, db: AsyncSession = Depends(get_db)):
+    await get_authorized_user(req.tg_id, db)
+    try:
+        userbot = NexusUserbot()
+        phone_code_hash = await userbot.send_code(req.phone)
+        return {
+            "success": True,
+            "phone_code_hash": phone_code_hash,
+            "message": "Код подтверждения отправлен в ваш аккаунт Telegram."
+        }
+    except Exception as exc:
+        logger.exception("Userbot send code failed: {}", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.post("/api/telegram/verify")
+async def verify_userbot(req: UserbotVerifyRequest, db: AsyncSession = Depends(get_db)):
+    await get_authorized_user(req.tg_id, db)
+    try:
+        userbot = NexusUserbot()
+        success = await userbot.verify_code(
+            phone=req.phone,
+            phone_code_hash=req.phone_code_hash,
+            code=req.code,
+            password=req.password
+        )
+        return {
+            "success": success,
+            "message": "Аккаунт Telegram успешно подключен к NEXUS!"
+        }
+    except Exception as exc:
+        logger.exception("Userbot verify code failed: {}", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.delete("/api/telegram/disconnect")
+async def disconnect_userbot(
+    tg_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    await get_authorized_user(tg_id, db)
+    try:
+        userbot = NexusUserbot()
+        await userbot.disconnect()
+        return {
+            "success": True,
+            "message": "Аккаунт Telegram отключен."
+        }
+    except Exception as exc:
+        logger.exception("Userbot disconnect failed: {}", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/api/telegram/chats")
+async def get_userbot_chats(
+    tg_id: int = Query(..., description="Telegram ID of the user"),
+    db: AsyncSession = Depends(get_db)
+):
+    await get_authorized_user(tg_id, db)
+    try:
+        userbot = NexusUserbot()
+        chats = await userbot.list_chats()
+        return chats
+    except Exception as exc:
+        logger.exception("Get userbot chats failed: {}", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.post("/api/telegram/toggle-chat")
+async def toggle_chat_analysis(req: ToggleChatRequest, db: AsyncSession = Depends(get_db)):
+    await get_authorized_user(req.tg_id, db)
+    try:
+        updated_chats = await db_ops.toggle_chat_analysis(
+            db=db,
+            tg_id=req.tg_id,
+            chat_id=req.chat_id,
+            is_active=req.is_active
+        )
+        await db.commit()
+        return {
+            "success": True,
+            "analyzed_chats": updated_chats,
+            "message": "Статус анализа чата изменен."
+        }
+    except Exception as exc:
+        logger.exception("Toggle chat analysis failed: {}", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+# ── 6. System Health Check ──
 
 @app.get("/health", tags=["System"], summary="Health check")
 async def health() -> JSONResponse:
@@ -485,7 +633,7 @@ async def health() -> JSONResponse:
         status_code=200 if overall == "ok" else 500,
     )
 
-# ── 6. Static Files Server ──
+# ── 7. Static Files Server ──
 
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 if not os.path.exists(static_dir):

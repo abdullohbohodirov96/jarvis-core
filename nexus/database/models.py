@@ -45,6 +45,14 @@ class User(Base):
         doc="Whether this user is an admin who can approve/deny others."
     )
 
+    analyzed_chats: Mapped[list] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+        server_default="'[]'",
+        doc="List of Telegram chat IDs/usernames to monitor and analyze."
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

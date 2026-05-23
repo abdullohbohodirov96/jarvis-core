@@ -59,7 +59,7 @@
             flex-direction: column;
             min-height: 100vh;
             position: relative;
-            padding-bottom: 80px; /* Space for nav bar */
+            padding-bottom: 85px; /* Space for nav bar */
         }
 
         /* --- Header Styling --- */
@@ -607,7 +607,7 @@
         /* Floating Add Button */
         .fab {
             position: fixed;
-            bottom: 95px;
+            bottom: 100px;
             right: 20px;
             width: 56px;
             height: 56px;
@@ -626,6 +626,61 @@
 
         .fab:active {
             transform: scale(0.95) rotate(90deg);
+        }
+
+        /* --- Userbot Manager Tab Styling --- */
+        .status-container {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: var(--card-radius);
+            margin-bottom: 24px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 16px;
+        }
+
+        .status-connected { color: var(--success-color); }
+        .status-disconnected { color: var(--danger-color); }
+
+        .chat-list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-item {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 14px 18px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: border-color var(--transition-speed);
+        }
+
+        .chat-item:hover {
+            border-color: rgba(88, 166, 255, 0.2);
+        }
+
+        .chat-item-info h4 {
+            font-size: 0.95rem;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .chat-item-info span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
 
         /* --- Profile / Admin Info Styling --- */
@@ -771,7 +826,7 @@
             bottom: 0;
             left: 0;
             right: 0;
-            height: 70px;
+            height: 75px;
             background: rgba(22, 27, 34, 0.8);
             border-top: 1px solid var(--border-color);
             backdrop-filter: blur(15px);
@@ -1001,7 +1056,53 @@
                 </div>
             </div>
 
-            <!-- ── TAB 3: SYSTEM STATUS ── -->
+            <!-- ── TAB 3: TELEGRAM USERBOT (NEW!) ── -->
+            <div id="tab-telegram" class="tab-panel">
+                <div class="section-header" style="margin-bottom: 20px;">
+                    <h2>Telegram Userbot (Личный Ассистент)</h2>
+                    <p>Подключите свой личный Telegram аккаунт для автоматического анализа ва va'dalar (обещаний) в чатах.</p>
+                </div>
+
+                <!-- Connection status card -->
+                <div class="status-container" id="userbot-status-panel">
+                    <div class="status-header status-disconnected" id="userbot-status-title">
+                        <i class="fa-solid fa-circle-xmark"></i> <span>Не подключено</span>
+                    </div>
+                    <div id="userbot-auth-form">
+                        <div class="input-group">
+                            <label for="userbot-phone">Номер телефона (в международном формате)</label>
+                            <input type="text" id="userbot-phone" placeholder="+998901234567">
+                        </div>
+                        <button class="btn" onclick="sendUserbotSMS()"><i class="fa-regular fa-paper-plane"></i> Отправить SMS код</button>
+                    </div>
+                    
+                    <!-- SMS & 2FA Confirm form (Hidden by default) -->
+                    <div id="userbot-verify-form" style="display: none; margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                        <div class="input-group">
+                            <label for="userbot-code">Код подтверждения из Telegram</label>
+                            <input type="text" id="userbot-code" placeholder="Введите код...">
+                        </div>
+                        <div class="input-group">
+                            <label for="userbot-password">Облачный пароль (2FA) (если включен)</label>
+                            <input type="password" id="userbot-password" placeholder="Введите пароль...">
+                        </div>
+                        <button class="btn" onclick="verifyUserbotSMS()"><i class="fa-solid fa-circle-check"></i> Подтвердить и войти</button>
+                    </div>
+                </div>
+
+                <!-- Chats Whitelist list -->
+                <div id="userbot-chats-section" style="display: none;">
+                    <div class="section-header" style="margin-bottom: 12px;">
+                        <h3>Выберите чаты для AI-анализа va'dalar и so'rovlar</h3>
+                        <p>ИИ будет читать только сообщения в активированных ниже чатах.</p>
+                    </div>
+                    <div class="chat-list-container" id="userbot-chats-list">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── TAB 4: SYSTEM STATUS ── -->
             <div id="tab-status" class="tab-panel">
                 <div class="section-header" style="margin-bottom: 20px;">
                     <h2>Профиль и Статус</h2>
@@ -1053,6 +1154,10 @@
             <div class="nav-tab" onclick="switchTab('todos', this)">
                 <i class="fa-solid fa-list-check"></i>
                 <span>Задачи</span>
+            </div>
+            <div class="nav-tab" onclick="switchTab('telegram', this)">
+                <i class="fa-brands fa-telegram"></i>
+                <span>Юзербот</span>
             </div>
             <div class="nav-tab" onclick="switchTab('status', this)">
                 <i class="fa-solid fa-circle-user"></i>
@@ -1127,6 +1232,8 @@
         let allTodos = [];
         let todoFilter = "all";
         let currentAppId = null;
+        let activeAnalyzedChats = [];
+        let phoneCodeHash = null;
 
         // Initialize App
         document.addEventListener("DOMContentLoaded", () => {
@@ -1235,6 +1342,7 @@
                     // Load active tab data
                     loadMarketIntegrations();
                     loadTodos();
+                    loadUserbotStatus();
                 } else {
                     document.getElementById("access-blocked").style.display = "flex";
                 }
@@ -1260,6 +1368,212 @@
                 fab.style.display = "flex";
             } else {
                 fab.style.display = "none";
+            }
+            
+            // Load fresh userbot chats if tab opened
+            if (tabId === "telegram") {
+                loadUserbotStatus();
+            }
+        }
+
+        // --- TELEGRAM USERBOT API (NEW!) ---
+
+        async function loadUserbotStatus() {
+            try {
+                const res = await fetch(`${apiBase}/api/telegram/status?tg_id=${tgId}`);
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                
+                activeAnalyzedChats = data.analyzed_chats || [];
+                renderUserbotStatus(data);
+            } catch (err) {
+                showToast("Не удалось загрузить статус Юзербота.", "danger");
+            }
+        }
+
+        function renderUserbotStatus(data) {
+            const titleEl = document.getElementById("userbot-status-title");
+            const formEl = document.getElementById("userbot-auth-form");
+            const verifyEl = document.getElementById("userbot-verify-form");
+            const chatsEl = document.getElementById("userbot-chats-section");
+            
+            if (data.connected && data.me) {
+                // Connected state
+                titleEl.className = "status-header status-connected";
+                titleEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Подключено как @${data.me.username || data.me.first_name}</span>`;
+                
+                formEl.innerHTML = `
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px; line-height: 1.5;">
+                         Ваш аккаунт <b>${data.me.phone || ""}</b> успешно подключен к системе автономного AI-ассистента. 
+                        ИИ круглосуточно анализирует выбранные переписки и автоматически экстрагирует va'dalar и so'rovlar в To-Do.
+                    </div>
+                    <button class="btn btn-danger" onclick="disconnectUserbot()"><i class="fa-solid fa-link-slash"></i> Отключить аккаунт</button>
+                `;
+                verifyEl.style.display = "none";
+                chatsEl.style.display = "block";
+                
+                loadUserbotChats();
+            } else {
+                // Disconnected state
+                titleEl.className = "status-header status-disconnected";
+                titleEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> <span>Не подключено</span>`;
+                
+                formEl.innerHTML = `
+                    <div class="input-group">
+                        <label for="userbot-phone">Номер телефона (в международном формате)</label>
+                        <input type="text" id="userbot-phone" placeholder="+998901234567">
+                    </div>
+                    <button class="btn" onclick="sendUserbotSMS()"><i class="fa-regular fa-paper-plane"></i> Отправить SMS код</button>
+                `;
+                chatsEl.style.display = "none";
+            }
+        }
+
+        async function sendUserbotSMS() {
+            const phoneInput = document.getElementById("userbot-phone").value.trim();
+            if (!phoneInput) {
+                showToast("Введите номер телефона!", "danger");
+                return;
+            }
+            
+            try {
+                showToast("Отправка SMS запроса...", "warning");
+                const res = await fetch(`${apiBase}/api/telegram/connect`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        tg_id: tgId,
+                        phone: phoneInput
+                    })
+                });
+                
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    phoneCodeHash = data.phone_code_hash;
+                    showToast("SMS код отправлен в ваш аккаунт Telegram!");
+                    document.getElementById("userbot-verify-form").style.display = "block";
+                } else {
+                    showToast(data.detail || "Ошибка при отправке СМС.", "danger");
+                }
+            } catch (err) {
+                showToast("Ошибка сети при запросе кода.", "danger");
+            }
+        }
+
+        async function verifyUserbotSMS() {
+            const phoneInput = document.getElementById("userbot-phone").value.trim();
+            const codeInput = document.getElementById("userbot-code").value.trim();
+            const passwordInput = document.getElementById("userbot-password").value.trim();
+            
+            if (!codeInput) {
+                showToast("Введите код подтверждения!", "danger");
+                return;
+            }
+            
+            try {
+                showToast("Авторизация кода...", "warning");
+                const res = await fetch(`${apiBase}/api/telegram/verify`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        tg_id: tgId,
+                        phone: phoneInput,
+                        phone_code_hash: phoneCodeHash,
+                        code: codeInput,
+                        password: passwordInput || null
+                    })
+                });
+                
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showToast("Авторизация прошла успешно! Юзербот запущен!");
+                    loadUserbotStatus();
+                } else {
+                    showToast(data.detail || "Неверный код или пароль 2FA.", "danger");
+                }
+            } catch (err) {
+                showToast("Ошибка авторизации. Проверьте правильность кода.", "danger");
+            }
+        }
+
+        async function disconnectUserbot() {
+            if (!confirm("Вы действительно хотите отключить свой Telegram аккаунт от AI ассистента?")) return;
+            try {
+                const res = await fetch(`${apiBase}/api/telegram/disconnect?tg_id=${tgId}`, {
+                    method: "DELETE"
+                });
+                
+                if (res.ok) {
+                    showToast("Юзербот отключен.");
+                    loadUserbotStatus();
+                } else {
+                    showToast("Ошибка отключения.", "danger");
+                }
+            } catch (err) {
+                showToast("Ошибка сети.", "danger");
+            }
+        }
+
+        async function loadUserbotChats() {
+            try {
+                const res = await fetch(`${apiBase}/api/telegram/chats?tg_id=${tgId}`);
+                if (!res.ok) throw new Error();
+                const chats = await res.json();
+                renderUserbotChats(chats);
+            } catch (err) {
+                showToast("Не удалось загрузить список диалогов.", "danger");
+            }
+        }
+
+        function renderUserbotChats(chats) {
+            const container = document.getElementById("userbot-chats-list");
+            container.innerHTML = "";
+            
+            if (chats.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fa-regular fa-comment-dots"></i><p>Диалоги не найдены.</p></div>';
+                return;
+            }
+            
+            chats.forEach(chat => {
+                const isAnalyzed = activeAnalyzedChats.includes(chat.id);
+                const chatCard = document.createElement("div");
+                chatCard.className = "chat-item";
+                
+                chatCard.innerHTML = `
+                    <div class="chat-item-info">
+                        <h4>${escapeHTML(chat.name)}</h4>
+                        <span>${chat.type.toUpperCase()} ${chat.username ? '@' + chat.username : ''}</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" ${isAnalyzed ? 'checked' : ''} onchange="toggleChatAnalysis(${chat.id}, this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                `;
+                container.appendChild(chatCard);
+            });
+        }
+
+        async function toggleChatAnalysis(chatId, active) {
+            try {
+                const res = await fetch(`${apiBase}/api/telegram/toggle-chat`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        tg_id: tgId,
+                        chat_id: chatId,
+                        is_active: active
+                    })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    activeAnalyzedChats = data.analyzed_chats;
+                    showToast(active ? "Анализ чата активирован!" : "Анализ чата отключен.");
+                } else {
+                    showToast("Не удалось обновить статус анализа чата.", "danger");
+                }
+            } catch (err) {
+                showToast("Сбой сети.", "danger");
             }
         }
 
