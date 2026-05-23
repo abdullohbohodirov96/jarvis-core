@@ -168,17 +168,43 @@ class NexusUserbot:
                     chat = await event.get_chat()
                     chat_title = getattr(chat, "title", "Private Chat")
                     
-                    # Analyze message using AI
+                    # Analyze message using AI with dialogue context history (last 5 messages)
                     is_outgoing = event.out
                     message_text = event.message.message or ""
                     
+                    # Fetch dialogue history context
+                    history_text = ""
+                    try:
+                        history_messages = []
+                        async for msg in client.iter_messages(chat_id, limit=5):
+                            if msg.message:
+                                history_messages.append(msg)
+                        
+                        history_messages.reverse()
+                        
+                        for msg in history_messages:
+                            msg_sender = await msg.get_sender()
+                            msg_sender_name = "Unknown"
+                            if isinstance(msg_sender, User):
+                                msg_sender_name = msg_sender.first_name + (f" {msg_sender.last_name}" if msg_sender.last_name else "")
+                                if msg_sender.username:
+                                    msg_sender_name += f" (@{msg_sender.username})"
+                            elif msg_sender:
+                                msg_sender_name = getattr(msg_sender, "title", "Chat")
+                                
+                            role = "Siz (egasi)" if msg.out else f"Suhbatdosh '{msg_sender_name}'"
+                            history_text += f"- [{role}]: \"{msg.message}\"\n"
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch conversation history context: {e}")
+
                     logger.info(f"Analyzing message in chat {chat_title} from {sender_name}: '{message_text[:40]}...'")
                     
                     task_data = await analyzer.analyze_message(
                         sender_name=sender_name,
                         message_text=message_text,
                         chat_title=chat_title,
-                        is_outgoing=is_outgoing
+                        is_outgoing=is_outgoing,
+                        history_text=history_text
                     )
                     
                     if task_data:
@@ -197,12 +223,12 @@ class NexusUserbot:
                         # Notify the owner via our Main Aiogram Bot!
                         from telegram.bot import bot
                         if bot:
-                            badge = "🔴 <b>Обнаружено Ваше обещание:</b>" if is_outgoing else "🔵 <b>Обнаружен запрос к Вам:</b>"
+                            badge = "🔴 <b>Sizning va'dangiz aniqlandi:</b>" if is_outgoing else "🔵 <b>Sizga so'rov yuborildi:</b>"
                             notify_text = (
                                 f"{badge}\n\n"
                                 f"📝 <b>{todo.title}</b>\n"
                                 f"📋 {todo.description}\n\n"
-                                f"<i>Я автоматически добавил эту задачу в ваш список дел NEXUS.</i>"
+                                f"<i>Men ushbu vazifani NEXUS ro'yxatingizga avtomatik ravishda qo'shib qo'ydim.</i>"
                             )
                             await bot.send_message(
                                 chat_id=settings.OWNER_ID,
