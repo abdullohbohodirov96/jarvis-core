@@ -27,6 +27,39 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _detect_voice_for_text(text: str, default_voice: str) -> str:
+    """
+    Detect spoken language of text and return the corresponding male neural voice.
+    - Uzbek: uz-UZ-SardorNeural (male)
+    - Russian: ru-RU-DmitryNeural (male)
+    - English: en-US-GuyNeural (male)
+    """
+    text_lower = text.lower()
+
+    # Check for Uzbek characters or common Uzbek words
+    uzbek_words = {
+        "men", "sen", "u", "biz", "siz", "ular", "salom", "rahmat", "ha", "yo'q", "yoki",
+        "va", "uchun", "bilan", "nima", "qanday", "qachon", "qayerda", "kim", "ish", "vazifa",
+        "yarat", "och", "yoz", "eslat", "bugun", "ertaga", "o'zbek", "o'zbekcha", "xojayin"
+    }
+    has_uzbek_chars = any(c in text_lower for c in ["o'", "g'", "sh", "ch", "o‘", "g‘", "h", "q"])
+    words = set(text_lower.split())
+    is_uzbek = has_uzbek_chars or bool(words.intersection(uzbek_words))
+
+    # Check for Russian Cyrillic characters
+    is_russian = any('\u0400' <= c <= '\u04FF' for c in text)
+
+    if is_uzbek:
+        return "uz-UZ-SardorNeural"
+    elif is_russian:
+        return "ru-RU-DmitryNeural"
+    else:
+        # Default: switch female default to male GuyNeural if needed
+        if default_voice in ("en-US-AriaNeural", "en-US-Aria"):
+            return "en-US-GuyNeural"
+        return default_voice
+
+
 class EdgeTTS:
     """
     Microsoft Edge TTS via the edge-tts Python library.
@@ -51,7 +84,8 @@ class EdgeTTS:
         """
         import edge_tts  # type: ignore[import]
 
-        communicate = edge_tts.Communicate(text=text, voice=self._voice)
+        active_voice = _detect_voice_for_text(text, self._voice)
+        communicate = edge_tts.Communicate(text=text, voice=active_voice)
         audio_chunks: list[bytes] = []
 
         async for chunk in communicate.stream():
@@ -80,7 +114,8 @@ class EdgeTTS:
         """
         import edge_tts  # type: ignore[import]
 
-        communicate = edge_tts.Communicate(text=text, voice=self._voice)
+        active_voice = _detect_voice_for_text(text, self._voice)
+        communicate = edge_tts.Communicate(text=text, voice=active_voice)
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 yield chunk["data"]
@@ -177,7 +212,7 @@ class ElevenLabsTTS:
     async def synthesize(
         self,
         text: str,
-        model_id: str = "eleven_turbo_v2",
+        model_id: str = "eleven_multilingual_v2",
     ) -> bytes:
         """
         Synthesise text and return MP3 audio bytes.
@@ -219,7 +254,7 @@ class ElevenLabsTTS:
     async def synthesize_stream(
         self,
         text: str,
-        model_id: str = "eleven_turbo_v2",
+        model_id: str = "eleven_multilingual_v2",
     ) -> AsyncGenerator[bytes, None]:
         """
         Streaming synthesis: yield MP3 chunks as they stream from the API.

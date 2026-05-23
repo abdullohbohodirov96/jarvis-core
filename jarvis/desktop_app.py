@@ -119,6 +119,31 @@ def _macos_say(text):
         pass
 
 
+def _play_activation_chime():
+    try:
+        import sounddevice as sd
+        import numpy as np
+
+        sample_rate = 16000
+        # Tone 1: C5 (523 Hz)
+        t1 = np.linspace(0, 0.08, int(sample_rate * 0.08), False)
+        chime1 = np.sin(2 * np.pi * 523 * t1) * np.exp(-12 * t1)
+
+        # Silence
+        silence = np.zeros(int(sample_rate * 0.02))
+
+        # Tone 2: G5 (784 Hz)
+        t2 = np.linspace(0, 0.12, int(sample_rate * 0.12), False)
+        chime2 = np.sin(2 * np.pi * 784 * t2) * np.exp(-8 * t2)
+
+        chime = np.concatenate([chime1, silence, chime2])
+        chime = chime * 0.15  # Volume scaling
+
+        sd.play(chime.astype(np.float32), sample_rate)
+    except Exception as e:
+        log.warning("Failed to play activation chime: %s", e)
+
+
 # ══════════════════════════════════════════════════════════════════
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════
@@ -137,8 +162,22 @@ class JarvisDesktopApp(ctk.CTk):
         self._messages = []
         self._is_processing = False
         self._is_recording = False
+        self._is_speaking = False
+        self._wake_listening = False
+        self._wake_detector = None
         self._audio_chunks = []
         self._rec_stream = None
+
+        self._stt = None
+        self._tts = None
+        try:
+            from voice.stt import get_stt
+            from voice.tts import get_tts
+            self._stt = get_stt(model_name="base")
+            self._tts = get_tts()
+            log.info("Loaded high-quality STT and TTS engines in desktop app")
+        except Exception as e:
+            log.warning("Could not load high-quality voice engines: %s", e)
 
         self._agent = None
         if _AI_AVAILABLE and get_agent:
@@ -146,6 +185,7 @@ class JarvisDesktopApp(ctk.CTk):
             except: pass
 
         self._build_ui()
+        self.after(50, self._animate_orb)
         self.after(600, self._show_welcome)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -181,6 +221,20 @@ class JarvisDesktopApp(ctk.CTk):
         ctk.CTkButton(sb, text="+ Yangi Chat", height=42, font=ctk.CTkFont(size=14, weight="bold"),
                        fg_color=C.ACCENT, hover_color=C.ACCENT_H, corner_radius=10,
                        command=self._new_chat).pack(fill="x", padx=16, pady=(20,10))
+
+        ctk.CTkFrame(sb, height=1, fg_color=C.BORDER).pack(fill="x", padx=16, pady=8)
+
+        # Jarvis Orb Canvas
+        orb_frame = ctk.CTkFrame(sb, fg_color="transparent")
+        orb_frame.pack(fill="x", padx=16, pady=5)
+        self._orb_canvas = ctk.CTkCanvas(orb_frame, width=150, height=150, bg=C.SIDEBAR, highlightthickness=0)
+        self._orb_canvas.pack(anchor="center")
+
+        # Wake Word Toggle Switch
+        self._wake_switch = ctk.CTkSwitch(sb, text="Faol tinglash (Jarvis)", font=ctk.CTkFont(size=12),
+                                          progress_color=C.ACCENT, button_color=C.T1,
+                                          command=self._toggle_wake_word)
+        self._wake_switch.pack(fill="x", padx=20, pady=(10, 15))
 
         ctk.CTkFrame(sb, height=1, fg_color=C.BORDER).pack(fill="x", padx=16, pady=8)
 
@@ -359,6 +413,16 @@ class JarvisDesktopApp(ctk.CTk):
         )
 
     async def _transcribe(self, wav_bytes):
+        if self._stt:
+            try:
+                text = await self._stt.transcribe(wav_bytes)
+                text = text.strip()
+                if not text:
+                    return {"error": "Ovoz aniqlanmadi"}
+                return {"text": text}
+            except Exception as e:
+                log.warning("Local STT failed: %s, falling back to OpenAI", e)
+
         api_key = settings.OPENAI_API_KEY
         if not api_key or "your" in api_key:
             return {"error": "API kalit sozlanmagan"}
@@ -496,7 +560,147 @@ class JarvisDesktopApp(ctk.CTk):
         if speak:
             clean = text.split("\n\n[Amal")[0].strip()
             if clean:
-                threading.Thread(target=_macos_say, args=(clean,), daemon=True).start()
+                self._is_speaking = True
+                def run_speak():
+                    try:
+                        if self._tts:
+                            asyncio.run_coroutine_threadsafe(self._tts.speak(clean), self._async._loop).result()
+                        else:
+                            _macos_say(clean)
+                    except Exception as e:
+                        log.warning("Speak execution failed: %s", e)
+                    finally:
+                        self.after(0, self._reset_speaking_state)
+                threading.Thread(target=run_speak, daemon=True).start()
+
+    def _reset_speaking_state(self):
+        self._is_speaking = False
+
+    # ═══════════════════════ ORB ANIMATION & WAKE WORD ═══════════════════════
+
+    def _animate_orb(self):
+        """30fps smooth animation loop for JARVIS glowing orb."""
+        if not hasattr(self, "_orb_canvas") or not self._orb_canvas.winfo_exists():
+            return
+
+        self._orb_canvas.delete("all")
+        width = 150
+        height = 150
+        cx, cy = width / 2, height / 2
+        r = 45 # base radius
+
+        t = time.time()
+
+        # Draw background outer glow
+        if self._is_recording:
+            pulse = r + 15 * np.abs(np.sin(t * 10))
+            self._orb_canvas.create_oval(cx - pulse, cy - pulse, cx + pulse, cy + pulse,
+                                         fill="", outline="#ef4444", width=2)
+            # Draw moving voice waves
+            points = []
+            for x in range(0, width, 5):
+                y = cy + (18 * np.sin(x * 0.1 + t * 15) * np.sin(x * 0.05 + t * 5))
+                points.append((x, y))
+            for i in range(len(points) - 1):
+                self._orb_canvas.create_line(points[i][0], points[i][1], points[i+1][0], points[i+1][1],
+                                             fill="#ef4444", width=3)
+        elif self._is_processing:
+            for i in range(8):
+                angle = (t * 5) + (i * np.pi / 4)
+                dx = cx + 55 * np.cos(angle)
+                dy = cy + 55 * np.sin(angle)
+                self._orb_canvas.create_oval(dx - 5, dy - 5, dx + 5, dy + 5, fill="#f59e0b", outline="")
+            
+            pulse = r + 5 * np.sin(t * 8)
+            self._orb_canvas.create_oval(cx - pulse, cy - pulse, cx + pulse, cy + pulse,
+                                         fill="", outline="#f59e0b", width=3)
+        elif getattr(self, "_is_speaking", False):
+            pulse = r + 8 * np.sin(t * 12)
+            self._orb_canvas.create_oval(cx - pulse, cy - pulse, cx + pulse, cy + pulse,
+                                         fill="", outline=C.OK, width=2)
+            points1 = []
+            points2 = []
+            for x in range(0, width, 4):
+                y1 = cy + (22 * np.sin(x * 0.08 + t * 12))
+                y2 = cy + (12 * np.cos(x * 0.12 - t * 8))
+                points1.append((x, y1))
+                points2.append((x, y2))
+            for i in range(len(points1) - 1):
+                self._orb_canvas.create_line(points1[i][0], points1[i][1], points1[i+1][0], points1[i+1][1],
+                                             fill="#10b981", width=2)
+                self._orb_canvas.create_line(points2[i][0], points2[i][1], points2[i+1][0], points2[i+1][1],
+                                             fill="#34d399", width=1)
+        else:
+            # Idle breathing pulse (slow cyan glow)
+            pulse = r + 4 * np.sin(t * 2)
+            self._orb_canvas.create_oval(cx - pulse, cy - pulse, cx + pulse, cy + pulse,
+                                         fill="", outline="#1e293b", width=1)
+            self._orb_canvas.create_oval(cx - r, cy - r, cx + r, cy + r,
+                                         fill="", outline="#334155", width=2)
+            core_r = 15 + 2 * np.sin(t * 4)
+            self._orb_canvas.create_oval(cx - core_r, cy - core_r, cx + core_r, cy + core_r,
+                                         fill="#1e3a5f", outline="#3b82f6", width=2)
+
+        self.after(30, self._animate_orb)
+
+    def _toggle_wake_word(self):
+        val = self._wake_switch.get()
+        if val == 1:
+            self._start_wake_word_loop()
+        else:
+            self._stop_wake_word_loop()
+
+    def _start_wake_word_loop(self):
+        self._wake_listening = True
+        self._async.submit(self._wake_word_loop())
+        log.info("Continuous wake-word loop started.")
+
+    def _stop_wake_word_loop(self):
+        self._wake_listening = False
+        if self._wake_detector:
+            self._async.submit(self._wake_detector.stop())
+        log.info("Continuous wake-word loop stopped.")
+
+    async def _wake_word_loop(self):
+        try:
+            from voice.wake_word import get_wake_word_detector
+            detector = get_wake_word_detector()
+            self._wake_detector = detector
+            
+            while self._wake_listening:
+                log.info("Waiting for wake word...")
+                detected = await detector.wait_for_wake_word()
+                if not detected or not self._wake_listening:
+                    continue
+                
+                log.info("Wake word matched!")
+                _play_activation_chime()
+                
+                self.after(0, self._focus_window)
+                
+                self._is_speaking = True
+                greeting = "Ha, xo'jayin?"
+                self.after(0, lambda: self._bubble("assistant", greeting))
+                
+                if self._tts:
+                    await self._tts.speak(greeting)
+                else:
+                    _macos_say(greeting)
+                self._is_speaking = False
+                
+                self.after(500, self._start_recording)
+                
+                while self._is_recording or self._is_processing:
+                    await asyncio.sleep(0.5)
+        except Exception as e:
+            log.error("Wake word loop error: %s", e)
+
+    def _focus_window(self):
+        self.deiconify()
+        self.focus_force()
+        self.lift()
+        self.attributes('-topmost', True)
+        self.after(1000, lambda: self.attributes('-topmost', False))
 
     # ═══════════════════════ MISC ═══════════════════════
 
@@ -511,9 +715,21 @@ class JarvisDesktopApp(ctk.CTk):
             "Menga ovoz bilan buyruq bering: [MIC] tugmasini bosing va gapiring.\n"
             "Yoki pastdagi matn maydoniga yozing.\n\n"
             "Masalan: 'Chrome ochib ber', 'Google dan ob-havo qidir', 'Screenshot ol'")
-        _macos_say("Assalomu alaykum xo'jayin. Men Jarvis. Sizga qanday yordam bera olaman?")
+        
+        _play_activation_chime()
+        welcome_text = "Assalomu alaykum xo'jayin. Men Jarvis. Sizga qanday yordam bera olaman?"
+        if self._tts:
+            self._async.submit(self._tts.speak(welcome_text))
+        else:
+            _macos_say(welcome_text)
 
     def _on_close(self):
+        self._wake_listening = False
+        if self._wake_detector:
+            try:
+                self._wake_detector.stop()
+            except:
+                pass
         if self._is_recording and self._rec_stream:
             try: self._rec_stream.stop(); self._rec_stream.close()
             except: pass

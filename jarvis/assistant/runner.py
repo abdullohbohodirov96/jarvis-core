@@ -74,6 +74,31 @@ class AgentResponse:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
+def _play_activation_chime() -> None:
+    try:
+        import sounddevice as sd
+        import numpy as np
+
+        sample_rate = 16000
+        # Tone 1: C5 (523 Hz)
+        t1 = np.linspace(0, 0.08, int(sample_rate * 0.08), False)
+        chime1 = np.sin(2 * np.pi * 523 * t1) * np.exp(-12 * t1)
+
+        # Silence
+        silence = np.zeros(int(sample_rate * 0.02))
+
+        # Tone 2: G5 (784 Hz)
+        t2 = np.linspace(0, 0.12, int(sample_rate * 0.12), False)
+        chime2 = np.sin(2 * np.pi * 784 * t2) * np.exp(-8 * t2)
+
+        chime = np.concatenate([chime1, silence, chime2])
+        chime = chime * 0.15  # Volume scaling
+
+        sd.play(chime.astype(np.float32), sample_rate)
+    except Exception as e:
+        log.warning("Failed to play activation chime: {exc}", exc=e)
+
+
 # --------------------------------------------------------------------------- #
 # JarvisRunner                                                                   #
 # --------------------------------------------------------------------------- #
@@ -249,9 +274,13 @@ class JarvisRunner:
                 self.state = AssistantState.ACTIVATED
                 log.info("Wake word detected — activating.")
 
+                # Play quick activation chime
+                _play_activation_chime()
+
                 if tts is not None:
                     try:
-                        await tts.speak("Yes, sir?")
+                        # Uzbek dynamic voice synthesis greeting
+                        await tts.speak("Ha, xo'jayin?")
                     except Exception as exc:
                         log.warning("TTS activation sound failed: {exc}", exc=exc)
 

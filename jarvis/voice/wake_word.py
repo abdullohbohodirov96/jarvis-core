@@ -279,7 +279,16 @@ class WakeWordDetector:
                     if transcript:
                         logger.debug("WakeWordDetector transcript: %r", transcript)
 
-                    if self._wake_word in transcript.lower():
+                    # Dynamic wake word matcher with phonetic variations for 'jarvis'
+                    t_lower = transcript.lower()
+                    detected = False
+                    if self._wake_word == "jarvis":
+                        variations = ["jarvis", "jarves", "jarv", "yarvis", "javis", "charvis"]
+                        detected = any(v in t_lower for v in variations)
+                    else:
+                        detected = self._wake_word in t_lower
+
+                    if detected:
                         self._detection_count += 1
                         logger.info(
                             "Wake word %r detected (count=%d). Transcript: %r",

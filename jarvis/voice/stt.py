@@ -192,7 +192,7 @@ class SpeechToText:
     async def transcribe(
         self,
         audio_data: Union[bytes, np.ndarray],
-        language: str = "en",
+        language: str | None = None,
     ) -> TranscriptionResult:
         """
         Transcribe audio data.
@@ -203,11 +203,73 @@ class SpeechToText:
 
         Args:
             audio_data: Raw audio in one of the supported forms.
-            language:   ISO-639-1 language hint passed to Whisper.
+            language:   ISO-639-1 language hint passed to Whisper. If None, auto-detects.
 
         Returns:
             TranscriptionResult with text, language, confidence, duration, segments.
         """
+        from config.settings import settings
+        api_key = settings.OPENAI_API_KEY
+
+        # Check if OpenAI API Key is configured
+        if api_key and "your" not in api_key.lower():
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=api_key)
+
+            # If the audio_data is a numpy array, convert to WAV bytes first
+            if isinstance(audio_data, np.ndarray):
+                audio_bytes = _float32_to_wav_bytes(audio_data)
+            else:
+                audio_bytes = audio_data
+
+            tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            tmp.write(audio_bytes)
+            tmp.close()
+
+            try:
+                with open(tmp.name, "rb") as f:
+                    lang_param = language if language != "en" else None
+                    transcription = await client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=f,
+                        language=lang_param,
+                        response_format="verbose_json",
+                    )
+
+                text = getattr(transcription, "text", "").strip()
+                detected_lang = getattr(transcription, "language", language or "en")
+
+                # Format segments
+                segments = []
+                raw_segments = getattr(transcription, "segments", [])
+                for seg in raw_segments:
+                    segments.append({
+                        "word": getattr(seg, "text", "").strip(),
+                        "start": float(getattr(seg, "start", 0.0)),
+                        "end": float(getattr(seg, "end", 0.0)),
+                        "probability": 1.0 - float(getattr(seg, "no_speech_prob", 0.0)),
+                    })
+
+                # Calculate confidence
+                confidence = float(sum(s["probability"] for s in segments) / len(segments)) if segments else 1.0
+                duration = float(getattr(transcription, "duration", 0.0))
+
+                return TranscriptionResult(
+                    text=text,
+                    language=detected_lang,
+                    confidence=confidence,
+                    duration=duration,
+                    segments=segments,
+                )
+            except Exception as exc:
+                logger.error("OpenAI Whisper API transcription failed, falling back to local: %s", exc)
+            finally:
+                try:
+                    os.unlink(tmp.name)
+                except Exception:
+                    pass
+
+        # Fallback to local model
         model = await self._get_model()
 
         # Convert bytes → float32 numpy
@@ -230,12 +292,13 @@ class SpeechToText:
         self,
         model: Any,
         audio_f32: np.ndarray,
-        language: str,
+        language: str | None,
     ) -> TranscriptionResult:
         """Dispatch model.transcribe() to an executor and parse the result."""
         loop = asyncio.get_running_loop()
 
         def _transcribe() -> dict[str, Any]:
+            # If language is None, Whisper auto-detects
             return model.transcribe(
                 audio_f32,
                 language=language,
@@ -248,7 +311,7 @@ class SpeechToText:
         raw: dict[str, Any] = await loop.run_in_executor(None, _transcribe)
 
         text: str = (raw.get("text") or "").strip()
-        detected_lang: str = raw.get("language") or language
+        detected_lang: str = raw.get("language") or language or "en"
 
         # Flatten word-level data from segments
         segments: list[dict[str, Any]] = []
@@ -287,13 +350,13 @@ class SpeechToText:
     # Convenience wrappers
     # ------------------------------------------------------------------
 
-    async def transcribe_file(self, path: str, language: str = "en") -> TranscriptionResult:
+    async def transcribe_file(self, path: str, language: str | None = None) -> TranscriptionResult:
         """
         Transcribe audio from a file on disk.
 
         Args:
             path:     Absolute path to an audio file (WAV, MP3, FLAC, …).
-            language: Language hint.
+            language: Language hint. If None, auto-detects.
 
         Returns:
             TranscriptionResult.
@@ -311,7 +374,7 @@ class SpeechToText:
     async def transcribe_stream(
         self,
         audio_chunks: AsyncIterator[bytes],
-        language: str = "en",
+        language: str | None = None,
     ) -> AsyncIterator[str]:
         """
         Accumulate audio chunks and yield partial transcripts.

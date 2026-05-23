@@ -154,14 +154,14 @@ class WhisperSTT:
     async def transcribe_file(
         self,
         audio_path: str,
-        language: str = "en",
+        language: str | None = None,
     ) -> TranscriptionResult:
         """
         Transcribe an audio file from disk.
 
         Args:
             audio_path: Absolute path to the audio file.
-            language:   ISO-639-1 language hint.
+            language:   ISO-639-1 language hint. If None, auto-detects.
 
         Returns:
             TranscriptionResult with text, language, confidence, segments.
@@ -176,7 +176,7 @@ class WhisperSTT:
     async def transcribe_bytes(
         self,
         audio_bytes: bytes,
-        language: str = "en",
+        language: str | None = None,
     ) -> TranscriptionResult:
         """
         Transcribe raw audio bytes.
@@ -196,7 +196,7 @@ class WhisperSTT:
     async def _transcribe_bytes_api(
         self,
         audio_bytes: bytes,
-        language: str,
+        language: str | None,
     ) -> TranscriptionResult:
         """Use the OpenAI Whisper HTTP API."""
         assert self._openai_client is not None
@@ -230,7 +230,7 @@ class WhisperSTT:
 
             return TranscriptionResult(
                 text=(response.text or "").strip(),
-                language=getattr(response, "language", language) or language,
+                language=getattr(response, "language", language or "en") or "en",
                 confidence=1.0,  # API does not expose per-utterance confidence
                 segments=segments,
                 duration=duration,
@@ -241,7 +241,7 @@ class WhisperSTT:
     async def _transcribe_bytes_local(
         self,
         audio_bytes: bytes,
-        language: str,
+        language: str | None,
     ) -> TranscriptionResult:
         """Use the locally loaded openai-whisper model."""
         model = await self._load_model()

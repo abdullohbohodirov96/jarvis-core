@@ -152,6 +152,37 @@ def _mp3_bytes_to_float32(mp3_bytes: bytes) -> tuple[np.ndarray, int]:
         ) from exc
 
 
+def _detect_voice_for_text(text: str, default_voice: str) -> str:
+    """
+    Detect spoken language of text and return the corresponding male neural voice.
+    - Uzbek: uz-UZ-SardorNeural (male)
+    - Russian: ru-RU-DmitryNeural (male)
+    - English: en-US-GuyNeural (male)
+    """
+    text_lower = text.lower()
+
+    # Check for Uzbek characters or common Uzbek words
+    uzbek_words = {
+        "men", "sen", "u", "biz", "siz", "ular", "salom", "rahmat", "ha", "yo'q", "yoki",
+        "va", "uchun", "bilan", "nima", "qanday", "qachon", "qayerda", "kim", "ish", "vazifa",
+        "yarat", "och", "yoz", "eslat", "bugun", "ertaga", "o'zbek", "o'zbekcha", "xojayin"
+    }
+    has_uzbek_chars = any(c in text_lower for c in ["o'", "g'", "sh", "ch", "o‘", "g‘", "h", "q"])
+    words = set(text_lower.split())
+    is_uzbek = has_uzbek_chars or bool(words.intersection(uzbek_words))
+
+    # Check for Russian Cyrillic characters
+    is_russian = any('\u0400' <= c <= '\u04FF' for c in text)
+
+    if is_uzbek:
+        return "uz-UZ-SardorNeural"
+    elif is_russian:
+        return "ru-RU-DmitryNeural"
+    else:
+        # Default to configured voice (e.g. en-US-GuyNeural)
+        return default_voice
+
+
 # ---------------------------------------------------------------------------
 # TextToSpeech
 # ---------------------------------------------------------------------------
@@ -235,9 +266,10 @@ class TextToSpeech:
         for piece in pieces:
             if not piece.strip():
                 continue
+            active_voice = _detect_voice_for_text(piece, self._voice)
             communicate = edge_tts.Communicate(
                 text=piece,
-                voice=self._voice,
+                voice=active_voice,
                 rate=self._rate,
                 volume=self._volume,
             )
@@ -329,9 +361,10 @@ class TextToSpeech:
                 "edge-tts is not installed. Run: pip install edge-tts"
             ) from exc
 
+        active_voice = _detect_voice_for_text(text, self._voice)
         communicate = edge_tts.Communicate(
             text=text,
-            voice=self._voice,
+            voice=active_voice,
             rate=self._rate,
             volume=self._volume,
         )

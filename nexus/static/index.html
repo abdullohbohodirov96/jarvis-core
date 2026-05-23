@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS Platform — Telegram Mini App</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --panel-bg: rgba(22, 27, 34, 0.7);
+            --border-color: rgba(48, 54, 61, 0.8);
+            --accent-blue: #58a6ff;
+            --accent-glow: rgba(88, 166, 255, 0.15);
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --success-color: #3fb950;
+            --danger-color: #f85149;
+            --warning-color: #d29922;
+            --card-radius: 16px;
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(26, 38, 57, 0.5) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(13, 23, 42, 0.8) 0px, transparent 50%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Glassmorphism Container --- */
+        .app-container {
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            position: relative;
+            padding-bottom: 80px; /* Space for nav bar */
+        }
+
+        /* --- Header Styling --- */
+        header {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(13, 17, 23, 0.8);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1f6feb 0%, var(--accent-blue) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px var(--accent-glow);
+            animation: pulse-glow 3s infinite ease-in-out;
+        }
+
+        .logo-circle i {
+            color: #ffffff;
+            font-size: 1.2rem;
+        }
+
+        .brand-info h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: linear-gradient(to right, #ffffff, var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-info span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+            box-shadow: 0 0 8px var(--success-color);
+        }
+
+        .user-pill {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+        }
+
+        .user-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #21262d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.65rem;
+            color: var(--accent-blue);
+        }
+
+        /* --- Main Content Tab Panels --- */
+        main {
+            padding: 16px;
+            flex-grow: 1;
+        }
+
+        .tab-panel {
+            display: none;
+            animation: fadeIn 0.4s ease-in-out forwards;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* --- Development/Auth Overlay (Outside TG) --- */
+        #auth-setup {
+            background: rgba(13, 17, 23, 0.95);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .auth-card {
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            padding: 30px;
+            border-radius: var(--card-radius);
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .auth-card h2 {
+            font-family: 'Outfit', sans-serif;
+            margin-bottom: 12px;
+            color: #fff;
+        }
+
+        .auth-card p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+
+        .input-group {
+            text-align: left;
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .input-group input, .input-group textarea, .input-group select {
+            width: 100%;
+            background-color: #0d1117;
+            border: 1px solid var(--border-color);
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color var(--transition-speed);
+        }
+
+        .input-group input:focus, .input-group textarea:focus, .input-group select:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #1f6feb 0%, var(--accent-blue) 100%);
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px var(--accent-glow);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+            color: var(--text-main);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #da3633 0%, var(--danger-color) 100%);
+            box-shadow: 0 4px 12px rgba(248, 81, 73, 0.15);
+        }
+
+        /* --- Marketplace Styling --- */
+        .section-header {
+            margin-bottom: 16px;
+        }
+
+        .section-header h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            color: #fff;
+        }
+
+        .section-header p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .market-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .market-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--card-radius);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            backdrop-filter: blur(12px);
+            transition: border-color var(--transition-speed), transform var(--transition-speed);
+        }
+
+        .market-card:hover {
+            border-color: rgba(88, 166, 255, 0.3);
+        }
+
+        .market-card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        .market-card-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .market-icon {
+            font-size: 1.8rem;
+            background: #21262d;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .market-info h3 {
+            font-size: 1rem;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .market-info span {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .market-desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .market-card-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid var(--border-color);
+            padding-top: 14px;
+            margin-top: 4px;
+        }
+
+        /* Toggle Switch */
+        .switch-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #21262d;
+            transition: .3s;
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: var(--text-muted);
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+            background-color: #fff;
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            width: auto;
+        }
+
+        /* --- To-Do Manager Styling --- */
+        .todo-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .todo-filters {
+            display: flex;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .filter-btn.active {
+            background: var(--accent-blue);
+            color: #fff;
+            border-color: var(--accent-blue);
+        }
+
+        .todo-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .todo-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .todo-card.completed {
+            opacity: 0.6;
+        }
+
+        .todo-checkbox {
+            margin-top: 3px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background var(--transition-speed), border-color var(--transition-speed);
+        }
+
+        .todo-checkbox.checked {
+            background-color: var(--success-color);
+            border-color: var(--success-color);
+        }
+
+        .todo-checkbox i {
+            color: #fff;
+            font-size: 0.65rem;
+            display: none;
+        }
+
+        .todo-checkbox.checked i {
+            display: block;
+        }
+
+        .todo-content {
+            flex-grow: 1;
+        }
+
+        .todo-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+            word-break: break-word;
+        }
+
+        .todo-card.completed .todo-title {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        .todo-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .todo-badges {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .badge-priority-high {
+            background: rgba(248, 81, 73, 0.15);
+            color: var(--danger-color);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+        }
+
+        .badge-priority-medium {
+            background: rgba(210, 153, 34, 0.15);
+            color: var(--warning-color);
+            border: 1px solid rgba(210, 153, 34, 0.3);
+        }
+
+        .badge-priority-low {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--accent-blue);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+        }
+
+        .badge-date {
+            background: #21262d;
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .todo-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .todo-action-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: color 0.2s;
+        }
+
+        .todo-action-btn:hover {
+            color: var(--danger-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+        }
+
+        /* Floating Add Button */
+        .fab {
+            position: fixed;
+            bottom: 95px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1f6feb 0%, var(--accent-blue) 100%);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(88, 166, 255, 0.4);
+            cursor: pointer;
+            z-index: 90;
+            font-size: 1.4rem;
+            transition: transform 0.2s;
+        }
+
+        .fab:active {
+            transform: scale(0.95) rotate(90deg);
+        }
+
+        /* --- Profile / Admin Info Styling --- */
+        .profile-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--card-radius);
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .profile-avatar-large {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1f6feb 0%, var(--accent-blue) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #fff;
+            margin: 0 auto 16px auto;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .profile-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .profile-role {
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent-blue);
+            padding: 4px 12px;
+            border-radius: 12px;
+            display: inline-block;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+
+        .profile-meta-list {
+            text-align: left;
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+        }
+
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+
+        .meta-item span:first-child {
+            color: var(--text-muted);
+        }
+
+        .meta-item span:last-child {
+            color: #fff;
+            font-weight: 500;
+        }
+
+        /* --- Beautiful Modal Window --- */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(13, 17, 23, 0.85);
+            z-index: 500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            backdrop-filter: blur(8px);
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            border-radius: var(--card-radius);
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            max-height: 90vh;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-header h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            color: #fff;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 12px;
+        }
+
+        /* --- Footer Bottom Navigation --- */
+        nav.bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background: rgba(22, 27, 34, 0.8);
+            border-top: 1px solid var(--border-color);
+            backdrop-filter: blur(15px);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            max-width: 600px;
+            margin: 0 auto;
+            z-index: 100;
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.4);
+        }
+
+        .nav-tab {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-muted);
+            text-decoration: none;
+            cursor: pointer;
+            transition: color 0.2s;
+            font-size: 0.75rem;
+            font-weight: 500;
+            width: 25%;
+        }
+
+        .nav-tab i {
+            font-size: 1.25rem;
+            transition: transform 0.2s;
+        }
+
+        .nav-tab.active {
+            color: var(--accent-blue);
+        }
+
+        .nav-tab.active i {
+            transform: translateY(-2px);
+        }
+
+        /* --- Toasts (Notifications) --- */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 90%;
+            max-width: 320px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: #fff;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: toastIn 0.3s ease-out forwards, toastOut 0.3s ease-in 2.7s forwards;
+            pointer-events: auto;
+        }
+
+        .toast-success { border-left: 4px solid var(--success-color); }
+        .toast-danger { border-left: 4px solid var(--danger-color); }
+        .toast-warning { border-left: 4px solid var(--warning-color); }
+
+        /* --- Animations --- */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 12px var(--accent-glow); }
+            50% { box-shadow: 0 0 20px rgba(88, 166, 255, 0.3); }
+        }
+
+        @keyframes toastIn {
+            to { opacity: 1; transform: translateY(0) translateX(0); }
+        }
+
+        @keyframes toastOut {
+            to { opacity: 0; transform: translateY(-20px); }
+        }
+
+        /* --- Forbidden / Access Blocked overlay --- */
+        #access-blocked {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-color);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .blocked-card {
+            max-width: 400px;
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            padding: 40px 24px;
+            border-radius: var(--card-radius);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .blocked-card i {
+            font-size: 4rem;
+            color: var(--danger-color);
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px rgba(248, 81, 73, 0.2);
+        }
+
+        .blocked-card h2 {
+            font-family: 'Outfit', sans-serif;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+
+        .blocked-card p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Access Blocked Overlay -->
+    <div id="access-blocked">
+        <div class="blocked-card">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <h2>Доступ ограничен</h2>
+            <p>Ваша учетная запись ожидает одобрения администратора или была заблокирована. Заявка создается автоматически при первом запуске бота.</p>
+        </div>
+    </div>
+
+    <!-- Dev/Browser Login Form -->
+    <div id="auth-setup">
+        <div class="auth-card">
+            <h2>NEXUS Sandbox Auth</h2>
+            <p>Вне среды Telegram Mini App введите ваш Telegram ID для эмуляции запросов.</p>
+            <div class="input-group">
+                <label for="dev-tg-id">Telegram User ID</label>
+                <input type="number" id="dev-tg-id" placeholder="Например: 123456789">
+            </div>
+            <div class="input-group">
+                <label for="dev-username">Username (необязательно)</label>
+                <input type="text" id="dev-username" placeholder="alex_dev">
+            </div>
+            <button class="btn" onclick="saveDevAuth()"><i class="fa-solid fa-right-to-bracket"></i> Войти в эмуляцию</button>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="brand-container">
+                <div class="logo-circle">
+                    <i class="fa-solid fa-circle-nodes"></i>
+                </div>
+                <div class="brand-info">
+                    <h1>NEXUS</h1>
+                    <span><span class="status-dot"></span> Mini App SaaS</span>
+                </div>
+            </div>
+            <div class="user-pill">
+                <div class="user-avatar" id="avatar-letters">U</div>
+                <span id="user-display-name">User</span>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main>
+            <!-- ── TAB 1: MARKETPLACE ── -->
+            <div id="tab-market" class="tab-panel active">
+                <div class="section-header">
+                    <h2>Маркетплейс интеграций</h2>
+                    <p>Подключайте сервисы для автоматизации ваших рутинных процессов.</p>
+                </div>
+                <div class="market-grid" id="market-list">
+                    <!-- Dynamic rendering -->
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <p>Загрузка приложений...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── TAB 2: TO-DO MANAGER ── -->
+            <div id="tab-todos" class="tab-panel">
+                <div class="todo-header-row">
+                    <div class="section-header">
+                        <h2>Задачи (To-Do)</h2>
+                        <p>Управление вашими личными делами.</p>
+                    </div>
+                    <div class="todo-filters">
+                        <button class="filter-btn active" onclick="filterTodos('all', this)">Все</button>
+                        <button class="filter-btn" onclick="filterTodos('active', this)">В процессе</button>
+                        <button class="filter-btn" onclick="filterTodos('completed', this)">Выполненные</button>
+                    </div>
+                </div>
+                
+                <div class="todo-list" id="todo-list">
+                    <!-- Dynamic rendering -->
+                </div>
+            </div>
+
+            <!-- ── TAB 3: SYSTEM STATUS ── -->
+            <div id="tab-status" class="tab-panel">
+                <div class="section-header" style="margin-bottom: 20px;">
+                    <h2>Профиль и Статус</h2>
+                    <p>Общая информация о вашей подписке и роли в NEXUS.</p>
+                </div>
+
+                <div class="profile-card">
+                    <div class="profile-avatar-large" id="profile-initials">US</div>
+                    <div class="profile-name" id="profile-full-name">Nexus User</div>
+                    <div class="profile-role" id="profile-role-badge">Пользователь</div>
+                    
+                    <div class="profile-meta-list">
+                        <div class="meta-item">
+                            <span>Telegram ID</span>
+                            <span id="meta-tg-id">123456789</span>
+                        </div>
+                        <div class="meta-item">
+                            <span>Юзернейм</span>
+                            <span id="meta-username">@user</span>
+                        </div>
+                        <div class="meta-item">
+                            <span>Статус доступа</span>
+                            <span style="color: var(--success-color); font-weight: bold;"><i class="fa-solid fa-circle-check"></i> Активен</span>
+                        </div>
+                        <div class="meta-item">
+                            <span>Версия платформы</span>
+                            <span>v2.0.0 (SaaS)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-secondary" onclick="logoutDev()" id="logout-btn" style="display: none;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Выйти из песочницы
+                </button>
+            </div>
+        </main>
+
+        <!-- Floating Add Button for Todos -->
+        <div class="fab" id="fab-add-todo" style="display: none;" onclick="openAddTodoModal()">
+            <i class="fa-solid fa-plus"></i>
+        </div>
+
+        <!-- Footer Navigation -->
+        <nav class="bottom-nav">
+            <div class="nav-tab active" onclick="switchTab('market', this)">
+                <i class="fa-solid fa-store"></i>
+                <span>Магазин</span>
+            </div>
+            <div class="nav-tab" onclick="switchTab('todos', this)">
+                <i class="fa-solid fa-list-check"></i>
+                <span>Задачи</span>
+            </div>
+            <div class="nav-tab" onclick="switchTab('status', this)">
+                <i class="fa-solid fa-circle-user"></i>
+                <span>Профиль</span>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Connect Application Modal -->
+    <div class="modal" id="connect-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-app-name">Подключение приложения</h3>
+                <button class="modal-close" onclick="closeModal('connect-modal')">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-fields-container">
+                <!-- Fields dynamically inserted -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" onclick="closeModal('connect-modal')">Отмена</button>
+                <button class="btn btn-sm" id="btn-save-connection" onclick="saveConnection()">Подключить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Todo Modal -->
+    <div class="modal" id="todo-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="todo-modal-title">Добавить задачу</h3>
+                <button class="modal-close" onclick="closeModal('todo-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="todo-title-input">Название задачи *</label>
+                    <input type="text" id="todo-title-input" placeholder="Например: подготовить презентацию...">
+                </div>
+                <div class="input-group">
+                    <label for="todo-desc-input">Описание (необязательно)</label>
+                    <textarea id="todo-desc-input" rows="3" placeholder="Детали задачи..."></textarea>
+                </div>
+                <div class="input-group">
+                    <label for="todo-priority-input">Приоритет</label>
+                    <select id="todo-priority-input">
+                        <option value="low">Низкий</option>
+                        <option value="medium" selected>Средний</option>
+                        <option value="high">Высокий</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="todo-date-input">Срок выполнения (необязательно)</label>
+                    <input type="datetime-local" id="todo-date-input">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" onclick="closeModal('todo-modal')">Отмена</button>
+                <button class="btn btn-sm" onclick="submitTodoForm()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <script>
+        // --- State variables ---
+        let tgId = null;
+        let username = "";
+        let displayName = "User";
+        let apiBase = window.location.origin; // Same origin
+        
+        let allTodos = [];
+        let todoFilter = "all";
+        let currentAppId = null;
+
+        // Initialize App
+        document.addEventListener("DOMContentLoaded", () => {
+            // Initialize Telegram WebApp
+            if (window.Telegram && window.Telegram.WebApp) {
+                const webApp = window.Telegram.WebApp;
+                webApp.ready();
+                webApp.expand();
+                
+                // Get user info from Telegram Unsafe InitData
+                const user = webApp.initDataUnsafe.user;
+                if (user) {
+                    tgId = user.id;
+                    username = user.username || "";
+                    displayName = user.first_name + (user.last_name ? " " + user.last_name : "");
+                    
+                    document.getElementById("user-display-name").innerText = displayName;
+                    document.getElementById("avatar-letters").innerText = displayName.substring(0, 1).toUpperCase();
+                    
+                    // Proceed to verify whitelist/auth
+                    verifyAuth();
+                } else {
+                    // Running in browser - show dev auth emulator
+                    checkLocalAuth();
+                }
+            } else {
+                // Running in browser - show dev auth emulator
+                checkLocalAuth();
+            }
+        });
+
+        // Toast notifications
+        function showToast(message, type = "success") {
+            const container = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+            toast.className = `toast toast-${type}`;
+            
+            let icon = "fa-circle-check";
+            if (type === "danger") icon = "fa-circle-exclamation";
+            if (type === "warning") icon = "fa-triangle-exclamation";
+            
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+            
+            // Remove toast after animation completes
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // Handle Sandbox authentication (outside Telegram)
+        function checkLocalAuth() {
+            const savedId = localStorage.getItem("dev_tg_id");
+            const savedName = localStorage.getItem("dev_username") || "Developer";
+            if (savedId) {
+                tgId = parseInt(savedId);
+                username = savedName;
+                displayName = savedName;
+                document.getElementById("user-display-name").innerText = displayName;
+                document.getElementById("avatar-letters").innerText = displayName.substring(0, 1).toUpperCase();
+                document.getElementById("logout-btn").style.display = "block";
+                verifyAuth();
+            } else {
+                document.getElementById("auth-setup").style.display = "flex";
+            }
+        }
+
+        function saveDevAuth() {
+            const idInput = document.getElementById("dev-tg-id").value;
+            const nameInput = document.getElementById("dev-username").value || "Developer";
+            if (!idInput) {
+                showToast("Telegram ID не может быть пустым!", "danger");
+                return;
+            }
+            localStorage.setItem("dev_tg_id", idInput);
+            localStorage.setItem("dev_username", nameInput);
+            document.getElementById("auth-setup").style.display = "none";
+            checkLocalAuth();
+        }
+
+        function logoutDev() {
+            localStorage.removeItem("dev_tg_id");
+            localStorage.removeItem("dev_username");
+            window.location.reload();
+        }
+
+        // Verify user against backend authorization whitelist
+        async function verifyAuth() {
+            try {
+                const response = await fetch(`${apiBase}/api/auth/check?tg_id=${tgId}&username=${username}`);
+                if (response.status === 403) {
+                    document.getElementById("access-blocked").style.display = "flex";
+                    return;
+                }
+                const data = await response.json();
+                if (data.allowed) {
+                    showToast("Авторизация успешно пройдена!");
+                    
+                    // Update Profile Tab values
+                    document.getElementById("profile-full-name").innerText = displayName;
+                    document.getElementById("profile-initials").innerText = displayName.substring(0, 2).toUpperCase();
+                    document.getElementById("profile-role-badge").innerText = data.is_admin ? "Администратор" : "Пользователь";
+                    document.getElementById("meta-tg-id").innerText = tgId;
+                    document.getElementById("meta-username").innerText = username ? "@" + username : "Нет юзернейма";
+                    
+                    // Load active tab data
+                    loadMarketIntegrations();
+                    loadTodos();
+                } else {
+                    document.getElementById("access-blocked").style.display = "flex";
+                }
+            } catch (err) {
+                showToast("Ошибка подключения к серверу!", "danger");
+                console.error(err);
+            }
+        }
+
+        // Tab Switch logic
+        function switchTab(tabId, element) {
+            // Deactivate all panels & tabs
+            document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+            document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+            
+            // Activate target
+            document.getElementById(`tab-${tabId}`).classList.add("active");
+            element.classList.add("active");
+
+            // Hide/Show floating action button for Todos
+            const fab = document.getElementById("fab-add-todo");
+            if (tabId === "todos") {
+                fab.style.display = "flex";
+            } else {
+                fab.style.display = "none";
+            }
+        }
+
+        // --- MARKETPLACE API ---
+
+        async function loadMarketIntegrations() {
+            try {
+                const res = await fetch(`${apiBase}/api/market/integrations?tg_id=${tgId}`);
+                if (!res.ok) throw new Error("Catalog fetch failed");
+                const apps = await res.json();
+                renderMarketCatalog(apps);
+            } catch (err) {
+                showToast("Не удалось загрузить каталог приложений.", "danger");
+            }
+        }
+
+        function renderMarketCatalog(apps) {
+            const container = document.getElementById("market-list");
+            container.innerHTML = "";
+            
+            if (apps.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-box-open"></i><p>В магазине пока нет доступных приложений.</p></div>';
+                return;
+            }
+
+            apps.forEach(app => {
+                const card = document.createElement("div");
+                card.className = "market-card";
+                
+                const connectionBadge = app.connected 
+                    ? `<span class="badge" style="background: rgba(63, 185, 80, 0.15); color: var(--success-color); border: 1px solid rgba(63, 185, 80, 0.3);">Подключено</span>`
+                    : `<span class="badge" style="background: rgba(139, 148, 158, 0.15); color: var(--text-muted); border: 1px solid var(--border-color);">Не активно</span>`;
+
+                card.innerHTML = `
+                    <div class="market-card-top">
+                        <div class="market-card-title">
+                            <div class="market-icon">${app.icon}</div>
+                            <div class="market-info">
+                                <h3>${app.name}</h3>
+                                <span>${app.category}</span>
+                            </div>
+                        </div>
+                        ${connectionBadge}
+                    </div>
+                    <p class="market-desc">${app.description}</p>
+                    <div class="market-card-actions">
+                        ${app.connected ? `
+                            <div class="switch-container">
+                                <span>Включить</span>
+                                <label class="switch">
+                                    <input type="checkbox" ${app.active ? 'checked' : ''} onchange="toggleApp('${app.id}', this.checked)">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-secondary btn-sm" onclick="openConnectModal('${app.id}', true)"><i class="fa-solid fa-sliders"></i> Настройки</button>
+                                <button class="btn btn-danger btn-sm" onclick="disconnectApp('${app.id}')"><i class="fa-solid fa-link-slash"></i></button>
+                            </div>
+                        ` : `
+                            <div></div>
+                            <button class="btn btn-sm" style="width: auto;" onclick="openConnectModal('${app.id}', false)"><i class="fa-solid fa-circle-plus"></i> Подключить</button>
+                        `}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // App connections logic
+        let currentAppSchema = [];
+
+        async function openConnectModal(appId, isEdit = false) {
+            currentAppId = appId;
+            try {
+                const res = await fetch(`${apiBase}/api/market/integrations?tg_id=${tgId}`);
+                const apps = await res.json();
+                const app = apps.find(a => a.id === appId);
+                if (!app) return;
+
+                currentAppSchema = app.schema;
+                document.getElementById("modal-app-name").innerText = `${isEdit ? 'Настройки' : 'Подключение'} ${app.name}`;
+                
+                const container = document.getElementById("modal-fields-container");
+                container.innerHTML = "";
+
+                app.schema.forEach(field => {
+                    const group = document.createElement("div");
+                    group.className = "input-group";
+                    
+                    const value = isEdit && app.credentials[field.name] ? app.credentials[field.name] : "";
+                    
+                    group.innerHTML = `
+                        <label for="cred-${field.name}">${field.label}</label>
+                        <input type="${field.secret ? 'password' : 'text'}" id="cred-${field.name}" placeholder="${field.placeholder}" value="${value}">
+                    `;
+                    container.appendChild(group);
+                });
+
+                document.getElementById("btn-save-connection").innerText = isEdit ? "Сохранить" : "Подключить";
+                document.getElementById("connect-modal").classList.add("active");
+            } catch (err) {
+                showToast("Не удалось открыть параметры подключения.", "danger");
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove("active");
+        }
+
+        async function saveConnection() {
+            const credentials = {};
+            let hasError = false;
+
+            currentAppSchema.forEach(field => {
+                const val = document.getElementById(`cred-${field.name}`).value.trim();
+                if (!val) {
+                    showToast(`Заполните обязательное поле: ${field.label}`, "danger");
+                    hasError = true;
+                    return;
+                }
+                // Don't overwrite with masks on edits
+                if (val !== "********") {
+                    credentials[field.name] = val;
+                }
+            });
+
+            if (hasError) return;
+
+            try {
+                const res = await fetch(`${apiBase}/api/market/connect`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        tg_id: tgId,
+                        app_id: currentAppId,
+                        credentials: credentials
+                    })
+                });
+
+                if (res.ok) {
+                    showToast("Приложение успешно настроено и подключено!");
+                    closeModal("connect-modal");
+                    loadMarketIntegrations();
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || "Ошибка настройки подключения.", "danger");
+                }
+            } catch (err) {
+                showToast("Сетевой сбой при отправке настроек.", "danger");
+            }
+        }
+
+        async function toggleApp(appId, active) {
+            try {
+                const res = await fetch(`${apiBase}/api/market/toggle`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        tg_id: tgId,
+                        app_id: appId,
+                        is_active: active
+                    })
+                });
+
+                if (res.ok) {
+                    showToast(active ? "Приложение успешно активировано!" : "Приложение отключено.");
+                    loadMarketIntegrations();
+                } else {
+                    showToast("Не удалось изменить статус модуля.", "danger");
+                }
+            } catch (err) {
+                showToast("Сетевая ошибка при изменении статуса.", "danger");
+            }
+        }
+
+        async function disconnectApp(appId) {
+            if (!confirm("Вы действительно хотите удалить подключение и очистить токен?")) return;
+            try {
+                const res = await fetch(`${apiBase}/api/market/disconnect?tg_id=${tgId}&app_id=${appId}`, {
+                    method: "DELETE"
+                });
+
+                if (res.ok) {
+                    showToast("Приложение полностью отключено.");
+                    loadMarketIntegrations();
+                } else {
+                    showToast("Ошибка при удалении интеграции.", "danger");
+                }
+            } catch (err) {
+                showToast("Не удалось отключить приложение из-за сетевого сбоя.", "danger");
+            }
+        }
+
+        // --- TO-DO LIST API ---
+
+        async function loadTodos() {
+            try {
+                const res = await fetch(`${apiBase}/api/todos?tg_id=${tgId}`);
+                if (!res.ok) throw new Error();
+                allTodos = await res.json();
+                renderTodos();
+            } catch (err) {
+                showToast("Не удалось синхронизировать список задач.", "danger");
+            }
+        }
+
+        function filterTodos(filter, btnElement) {
+            todoFilter = filter;
+            document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
+            btnElement.classList.add("active");
+            renderTodos();
+        }
+
+        function renderTodos() {
+            const container = document.getElementById("todo-list");
+            container.innerHTML = "";
+
+            let filtered = allTodos;
+            if (todoFilter === "active") {
+                filtered = allTodos.filter(t => !t.is_done);
+            } else if (todoFilter === "completed") {
+                filtered = allTodos.filter(t => t.is_done);
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-list-check"></i>
+                        <p>${todoFilter === 'completed' ? 'У вас нет завершенных задач.' : 'Все чисто! Нет активных задач.'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filtered.forEach(todo => {
+                const card = document.createElement("div");
+                card.className = `todo-card ${todo.is_done ? 'completed' : ''}`;
+                
+                const priorityBadge = `<span class="badge badge-priority-${todo.priority}">${todo.priority === 'high' ? 'Высокий' : todo.priority === 'medium' ? 'Средний' : 'Низкий'}</span>`;
+                
+                let dateBadge = "";
+                if (todo.due_date) {
+                    const date = new Date(todo.due_date);
+                    const formatted = date.toLocaleDateString("ru-RU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+                    dateBadge = `<span class="badge badge-date"><i class="fa-regular fa-clock"></i> ${formatted}</span>`;
+                }
+
+                card.innerHTML = `
+                    <div class="todo-checkbox ${todo.is_done ? 'checked' : ''}" onclick="toggleTodoStatus(${todo.id}, ${!todo.is_done})">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <div class="todo-content">
+                        <div class="todo-title">${escapeHTML(todo.title)}</div>
+                        ${todo.description ? `<p class="todo-desc">${escapeHTML(todo.description)}</p>` : ''}
+                        <div class="todo-badges">
+                            ${priorityBadge}
+                            ${dateBadge}
+                        </div>
+                    </div>
+                    <div class="todo-actions">
+                        <button class="todo-action-btn" onclick="deleteTodo(${todo.id})"><i class="fa-regular fa-trash-can"></i></button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Add Todo Form Submit
+        let editingTodoId = null;
+
+        function openAddTodoModal() {
+            editingTodoId = null;
+            document.getElementById("todo-modal-title").innerText = "Добавить задачу";
+            document.getElementById("todo-title-input").value = "";
+            document.getElementById("todo-desc-input").value = "";
+            document.getElementById("todo-priority-input").value = "medium";
+            document.getElementById("todo-date-input").value = "";
+            document.getElementById("todo-modal").classList.add("active");
+        }
+
+        async function submitTodoForm() {
+            const title = document.getElementById("todo-title-input").value.trim();
+            const description = document.getElementById("todo-desc-input").value.trim();
+            const priority = document.getElementById("todo-priority-input").value;
+            const dueDate = document.getElementById("todo-date-input").value;
+
+            if (!title) {
+                showToast("Введите название задачи!", "danger");
+                return;
+            }
+
+            const bodyData = {
+                tg_id: tgId,
+                title: title,
+                description: description || null,
+                priority: priority,
+                due_date: dueDate ? new Date(dueDate).toISOString() : null
+            };
+
+            try {
+                const res = await fetch(`${apiBase}/api/todos/add`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(bodyData)
+                });
+
+                if (res.ok) {
+                    showToast("Задача успешно создана!");
+                    closeModal("todo-modal");
+                    loadTodos();
+                } else {
+                    showToast("Не удалось добавить задачу.", "danger");
+                }
+            } catch (err) {
+                showToast("Сетевой сбой при создании задачи.", "danger");
+            }
+        }
+
+        async function toggleTodoStatus(todoId, checked) {
+            try {
+                const res = await fetch(`${apiBase}/api/todos/${todoId}/complete?tg_id=${tgId}&is_done=${checked}`, {
+                    method: "POST"
+                });
+
+                if (res.ok) {
+                    showToast(checked ? "Задача завершена! 🎉" : "Задача снова открыта.");
+                    loadTodos();
+                } else {
+                    showToast("Не удалось обновить статус задачи.", "danger");
+                }
+            } catch (err) {
+                showToast("Ошибка сети.", "danger");
+            }
+        }
+
+        async function deleteTodo(todoId) {
+            if (!confirm("Удалить эту задачу?")) return;
+            try {
+                const res = await fetch(`${apiBase}/api/todos/${todoId}?tg_id=${tgId}`, {
+                    method: "DELETE"
+                });
+
+                if (res.ok) {
+                    showToast("Задача удалена.");
+                    loadTodos();
+                } else {
+                    showToast("Не удалось удалить задачу.", "danger");
+                }
+            } catch (err) {
+                showToast("Сбой сети при удалении.", "danger");
+            }
+        }
+
+        // Utility helpers
+        function escapeHTML(str) {
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

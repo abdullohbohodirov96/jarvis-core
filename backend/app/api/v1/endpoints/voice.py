@@ -84,40 +84,18 @@ class VoiceStatusResponse(BaseModel):
 
 
 async def _transcribe_audio(audio_bytes: bytes, filename: str) -> Dict[str, Any]:
-    """Transcribe *audio_bytes* using Whisper.
+    """Transcribe *audio_bytes* using Whisper STT engine.
 
     Returns a dict with ``transcript``, ``language``, and ``duration``.
-    Falls back to a mock result when whisper is not installed.
     """
     try:
-        import whisper  # type: ignore
-        import tempfile, os
-
-        model = whisper.load_model(settings.WHISPER_MODEL)
-
-        # Whisper requires a file path; write to a temp file.
-        suffix = "." + (filename.rsplit(".", 1)[-1] if "." in filename else "wav")
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(audio_bytes)
-            tmp_path = tmp.name
-
-        try:
-            result = model.transcribe(tmp_path)
-        finally:
-            os.unlink(tmp_path)
-
+        from backend.app.voice.stt import get_stt_engine
+        stt = get_stt_engine()
+        result = await stt.transcribe_bytes(audio_bytes, language=None)
         return {
-            "transcript": result.get("text", "").strip(),
-            "language": result.get("language"),
-            "duration": result.get("segments", [{}])[-1].get("end") if result.get("segments") else None,
-        }
-
-    except ImportError:
-        logger.warning("whisper_not_installed_using_mock")
-        return {
-            "transcript": f"[Mock transcript of {len(audio_bytes)} bytes from {filename}]",
-            "language": "en",
-            "duration": len(audio_bytes) / 16000.0,  # rough estimate
+            "transcript": result.text,
+            "language": result.language,
+            "duration": result.duration,
         }
     except Exception as exc:
         raise VoiceException(

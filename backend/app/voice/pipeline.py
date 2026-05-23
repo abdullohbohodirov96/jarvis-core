@@ -66,35 +66,51 @@ class VoiceCommandResult:
 
 _COMMAND_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("set_reminder", re.compile(
-        r"(?:set|add|create)\s+(?:a\s+)?reminder\s+(?:for\s+)?(.+)",
+        r"(?:set|add|create)\s+(?:a\s+)?reminder\s+(?:for\s+)?(.+)|"
+        r"(?:eslatma\s+yarat|eslatma\s+qo'sh|eslat)\s+(?:uchun\s+)?(.+)|"
+        r"(?:напомни|добавь\s+напоминание|создай\s+напоминание)\s+(?:о\s+)?(.+)",
         re.IGNORECASE,
     )),
     ("send_telegram", re.compile(
-        r"(?:send|message|text)\s+(.+?)\s+(?:on\s+telegram\s*)?(?:saying\s+)?(.+)",
+        r"(?:send|message|text)\s+(.+?)\s+(?:on\s+telegram\s*)?(?:saying\s+)?(.+)|"
+        r"(?:telegramda\s+)?(.+?)(?:ga\s+yoz|ga\s+xabar\s+yubor)\s+(.+)|"
+        r"(?:напиши|отправь\s+сообщение)\s+(.+?)\s+(?:в\s+телеграм\s*)?(?:что\s+)?(.+)",
         re.IGNORECASE,
     )),
     ("list_tasks", re.compile(
-        r"(?:what(?:'s|\s+are|\s+is)\s+(?:my\s+)?|show(?:\s+me)?\s+(?:my\s+)?|list(?:\s+my)?\s+)tasks?",
+        r"(?:what(?:'s|\s+are|\s+is)\s+(?:my\s+)?|show(?:\s+me)?\s+(?:my\s+)?|list(?:\s+my)?\s+)tasks?|"
+        r"(?:ishlarimni\s+ko'rsat|ishlarimni\s+ayt|ishlarim\s+nima|vazifalarimni\s+ko'rsat|vazifalarim)|"
+        r"(?:покажи\s+мои\s+задачи|какие\s+у\s+меня\s+задачи|список\s+задач|задачи)",
         re.IGNORECASE,
     )),
     ("create_task", re.compile(
-        r"(?:add|create|make)\s+(?:a\s+)?task\s+(?:to\s+|for\s+)?(.+)",
+        r"(?:add|create|make)\s+(?:a\s+)?task\s+(?:to\s+|for\s+)?(.+)|"
+        r"(?:vazifa\s+yarat|yangi\s+vazifa|vazifa\s+qo'sh)\s+(?:uchun\s+)?(.+)|"
+        r"(?:создай\s+задачу|добавь\s+задачу)\s+(.+)",
         re.IGNORECASE,
     )),
     ("complete_task", re.compile(
-        r"(?:mark|complete|finish|done)\s+task\s+(.+)",
+        r"(?:mark|complete|finish|done)\s+task\s+(.+)|"
+        r"(?:vazifani\s+yop|vazifani\s+yakunla|vazifani\s+bajarildiga\s+o'tkaz)\s+(.+)|"
+        r"(?:выполни\s+задачу|закрой\s+задачу|заверши\s+задачу)\s+(.+)",
         re.IGNORECASE,
     )),
     ("check_messages", re.compile(
-        r"(?:check|read|show)\s+(?:my\s+)?(?:telegram\s+)?messages?",
+        r"(?:check|read|show)\s+(?:my\s+)?(?:telegram\s+)?messages?|"
+        r"(?:xabarlarni\s+tekshir|xabarlarni\s+o'qi|telegram\s+xabarlarni\s+ko'rsat|xabarlar)|"
+        r"(?:проверь\s+сообщения|прочитай\s+сообщения|покажи\s+сообщения)",
         re.IGNORECASE,
     )),
     ("play_music", re.compile(
-        r"play\s+(?:some\s+)?(.+?)(?:\s+music|\s+song)?$",
+        r"play\s+(?:some\s+)?(.+?)(?:\s+music|\s+song)?$|"
+        r"(.+?)(?:\s+musiqasini|\s+qo'shig'ini)?\s*(?:ijro\s+et|eshittir|qo'y|qo‘y)$|"
+        r"(?:включи|сыграй|поставь)\s+(?:песню|музыку\s+)?(.+?)$",
         re.IGNORECASE,
     )),
     ("set_timer", re.compile(
-        r"(?:set|start)\s+(?:a\s+)?timer\s+(?:for\s+)?(\d+)\s+(second|minute|hour)s?",
+        r"(?:set|start)\s+(?:a\s+)?timer\s+(?:for\s+)?(\d+)\s+(second|minute|hour)s?|"
+        r"(\d+)\s+(soniya|daqiqa|soat)(?:ga\s+)?(?:taymer\s+o'rnat|taymer\s+boshla|taymer)|"
+        r"(?:установи|запусти)\s+таймер\s+на\s+(\d+)\s+(секунд|минут|час|секунды|минуты|часа|секунду|минуту|часов)",
         re.IGNORECASE,
     )),
     ("weather", re.compile(
@@ -102,7 +118,7 @@ _COMMAND_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         re.IGNORECASE,
     )),
     ("stop", re.compile(
-        r"^(?:stop|cancel|nevermind|never\s+mind|abort)$",
+        r"^(?:stop|cancel|nevermind|never\s+mind|abort|to'xtat|to‘xtat|stop|отмена|стоп)$",
         re.IGNORECASE,
     )),
 ]
@@ -459,7 +475,9 @@ class VoicePipeline:
         for cmd_type, pattern in _COMMAND_PATTERNS:
             m = pattern.search(text)
             if m:
-                return {"type": cmd_type, "groups": m.groups()}
+                # filter out None groups to get only matched parameters
+                matched_groups = tuple(g for g in m.groups() if g is not None)
+                return {"type": cmd_type, "groups": matched_groups}
         return None
 
     # ------------------------------------------------------------------
@@ -573,15 +591,25 @@ class VoicePipeline:
         unit: str,
     ) -> dict[str, Any]:
         """Schedule a timer via asyncio (fires a log message on expiry)."""
+        unit_lower = unit.lower()
+        if unit_lower in ("soniya", "секунд", "секунды", "секунду", "second", "seconds"):
+            normalized_unit = "second"
+        elif unit_lower in ("daqiqa", "минут", "минуты", "минуту", "minute", "minutes"):
+            normalized_unit = "minute"
+        elif unit_lower in ("soat", "час", "часа", "часов", "hour", "hours"):
+            normalized_unit = "hour"
+        else:
+            normalized_unit = "minute"
+
         seconds_map = {"second": 1, "minute": 60, "hour": 3600}
-        seconds = amount * seconds_map.get(unit, 60)
+        seconds = amount * seconds_map.get(normalized_unit, 60)
 
         async def _fire() -> None:
             await asyncio.sleep(seconds)
-            logger.info("Timer expired: %d %s(s) for user %s", amount, unit, self._user_id)
+            logger.info("Timer expired: %d %s(s) for user %s", amount, normalized_unit, self._user_id)
 
         asyncio.ensure_future(_fire())
-        return {"seconds": seconds, "amount": amount, "unit": unit}
+        return {"seconds": seconds, "amount": amount, "unit": normalized_unit}
 
     async def _cmd_get_weather(self) -> dict[str, Any]:
         """Weather stub — integrate a weather API for production use."""
