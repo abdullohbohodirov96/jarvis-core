@@ -11,3 +11,5 @@ openai==1.57.2
 loguru==0.7.2
 python-dotenv==1.0.1
 httpx==0.28.1
+cryptography==42.0.8
+aiogram==3.7.0
