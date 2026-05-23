@@ -423,92 +423,81 @@
             width: auto;
         }
 
-        /* --- To-Do Manager Styling --- */
+        /* --- To-Do Manager / Kanban Styling --- */
         .todo-header-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
-        .todo-filters {
+        .kanban-board {
             display: flex;
-            gap: 8px;
-        }
-
-        .filter-btn {
-            background: #21262d;
-            border: 1px solid var(--border-color);
-            padding: 6px 12px;
-            border-radius: 15px;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-weight: 500;
-        }
-
-        .filter-btn.active {
-            background: var(--accent-blue);
-            color: #fff;
-            border-color: var(--accent-blue);
-        }
-
-        .todo-list {
-            display: flex;
-            flex-direction: column;
             gap: 12px;
+            overflow-x: auto;
+            padding-bottom: 12px;
         }
 
-        .todo-card {
+        .kanban-column {
+            min-width: 200px;
+            flex: 1;
             background: var(--panel-bg);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 16px;
+            overflow: hidden;
+        }
+
+        .kanban-header {
+            padding: 12px 14px;
+            border-bottom: 2px solid var(--accent-blue);
             display: flex;
-            align-items: flex-start;
-            gap: 14px;
-            backdrop-filter: blur(10px);
-            transition: opacity 0.3s, transform 0.3s;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .kanban-count {
+            background: rgba(255,255,255,0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+        }
+
+        .kanban-items {
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .kanban-empty {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            padding: 20px 10px;
+            font-style: italic;
+        }
+
+        .todo-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
         }
 
         .todo-card.completed {
-            opacity: 0.6;
-        }
-
-        .todo-checkbox {
-            margin-top: 3px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 2px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background var(--transition-speed), border-color var(--transition-speed);
-        }
-
-        .todo-checkbox.checked {
-            background-color: var(--success-color);
-            border-color: var(--success-color);
-        }
-
-        .todo-checkbox i {
-            color: #fff;
-            font-size: 0.65rem;
-            display: none;
-        }
-
-        .todo-checkbox.checked i {
-            display: block;
+            opacity: 0.5;
         }
 
         .todo-content {
-            flex-grow: 1;
+            margin-bottom: 8px;
         }
 
         .todo-title {
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             font-weight: 600;
             color: #fff;
             margin-bottom: 4px;
@@ -521,17 +510,17 @@
         }
 
         .todo-desc {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
-            margin-bottom: 8px;
-            line-height: 1.4;
+            margin-bottom: 6px;
+            line-height: 1.3;
         }
 
         .todo-badges {
             display: flex;
-            align-items: center;
-            gap: 8px;
             flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
         }
 
         .badge {
@@ -567,26 +556,56 @@
             display: flex;
             align-items: center;
             gap: 4px;
+            font-size: 0.6rem;
+            padding: 2px 6px;
+        }
+
+        .badge-source-promise {
+            background: rgba(63, 185, 80, 0.15);
+            color: #3fb950;
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .badge-source-request {
+            background: rgba(88, 166, 255, 0.15);
+            color: #58a6ff;
+            border: 1px solid rgba(88, 166, 255, 0.3);
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .badge-chat {
+            background: rgba(210, 153, 34, 0.15);
+            color: #d29922;
+            border: 1px solid rgba(210, 153, 34, 0.3);
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
         }
 
         .todo-actions {
             display: flex;
-            align-items: center;
-            gap: 12px;
+            gap: 6px;
         }
 
         .todo-action-btn {
-            background: none;
-            border: none;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
             color: var(--text-muted);
             cursor: pointer;
-            font-size: 0.95rem;
-            transition: color 0.2s;
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
         }
 
-        .todo-action-btn:hover {
-            color: var(--danger-color);
-        }
+        .btn-complete:hover { color: var(--success-color); border-color: var(--success-color); }
+        .btn-delete:hover { color: var(--danger-color); border-color: var(--danger-color); }
+        .btn-move:hover { color: var(--accent-blue); border-color: var(--accent-blue); }
 
         .empty-state {
             text-align: center;
@@ -1041,18 +1060,16 @@
             <div id="tab-todos" class="tab-panel">
                 <div class="todo-header-row">
                     <div class="section-header">
-                        <h2>Задачи (To-Do)</h2>
-                        <p>Управление вашими личными делами.</p>
+                        <h2>Vazifalar taxtasi</h2>
+                        <p>Barcha vazifalaringiz kanban ko'rinishida.</p>
                     </div>
-                    <div class="todo-filters">
-                        <button class="filter-btn active" onclick="filterTodos('all', this)">Все</button>
-                        <button class="filter-btn" onclick="filterTodos('active', this)">В процессе</button>
-                        <button class="filter-btn" onclick="filterTodos('completed', this)">Выполненные</button>
-                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="loadTodos()" style="width:auto;padding:6px 12px;font-size:0.75rem;">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
                 </div>
-                
-                <div class="todo-list" id="todo-list">
-                    <!-- Dynamic rendering -->
+
+                <div id="todo-list">
+                    <!-- Dynamic kanban rendering -->
                 </div>
             </div>
 
@@ -1192,23 +1209,32 @@
             </div>
             <div class="modal-body">
                 <div class="input-group">
-                    <label for="todo-title-input">Название задачи *</label>
-                    <input type="text" id="todo-title-input" placeholder="Например: подготовить презентацию...">
+                    <label for="todo-title-input">Vazifa nomi *</label>
+                    <input type="text" id="todo-title-input" placeholder="Masalan: hisobot tayyorlash...">
                 </div>
                 <div class="input-group">
-                    <label for="todo-desc-input">Описание (необязательно)</label>
-                    <textarea id="todo-desc-input" rows="3" placeholder="Детали задачи..."></textarea>
+                    <label for="todo-desc-input">Tavsif (ixtiyoriy)</label>
+                    <textarea id="todo-desc-input" rows="3" placeholder="Vazifa tafsilotlari..."></textarea>
                 </div>
                 <div class="input-group">
-                    <label for="todo-priority-input">Приоритет</label>
+                    <label for="todo-priority-input">Muhimlik darajasi</label>
                     <select id="todo-priority-input">
-                        <option value="low">Низкий</option>
-                        <option value="medium" selected>Средний</option>
-                        <option value="high">Высокий</option>
+                        <option value="low">Past</option>
+                        <option value="medium" selected>O'rta</option>
+                        <option value="high">Yuqori</option>
                     </select>
                 </div>
                 <div class="input-group">
-                    <label for="todo-date-input">Срок выполнения (необязательно)</label>
+                    <label for="todo-section-input">Bo'lim</label>
+                    <select id="todo-section-input">
+                        <option value="vazifalar" selected>📌 Vazifalar</option>
+                        <option value="kutilmoqda">⏳ Kutilmoqda</option>
+                        <option value="keraklilar">🛒 Keraklilari</option>
+                        <option value="bajarildi">✅ Bajarildi</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="todo-date-input">Muddat (ixtiyoriy)</label>
                     <input type="datetime-local" id="todo-date-input">
                 </div>
             </div>
@@ -1776,80 +1802,176 @@
                 allTodos = await res.json();
                 renderTodos();
             } catch (err) {
-                showToast("Не удалось синхронизировать список задач.", "danger");
+                showToast("Vazifalar ro'yxatini yuklashda xatolik.", "danger");
             }
-        }
-
-        function filterTodos(filter, btnElement) {
-            todoFilter = filter;
-            document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
-            btnElement.classList.add("active");
-            renderTodos();
         }
 
         function renderTodos() {
             const container = document.getElementById("todo-list");
-            container.innerHTML = "";
 
-            let filtered = allTodos;
-            if (todoFilter === "active") {
-                filtered = allTodos.filter(t => !t.is_done);
-            } else if (todoFilter === "completed") {
-                filtered = allTodos.filter(t => t.is_done);
-            }
+            const sections = {
+                "vazifalar": { name: "📌 VAZIFALAR", items: [], color: "#58a6ff" },
+                "kutilmoqda": { name: "⏳ KUTILMOQDA", items: [], color: "#d29922" },
+                "keraklilar": { name: "🛒 KERAKLILARI", items: [], color: "#3fb950" },
+                "bajarildi": { name: "✅ BAJARILDI", items: [], color: "#8b949e" }
+            };
 
-            if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fa-solid fa-list-check"></i>
-                        <p>${todoFilter === 'completed' ? 'У вас нет завершенных задач.' : 'Все чисто! Нет активных задач.'}</p>
-                    </div>
+            allTodos.forEach(todo => {
+                const section = todo.section || "vazifalar";
+                if (sections[section]) {
+                    sections[section].items.push(todo);
+                }
+            });
+
+            let html = '<div class="kanban-board">';
+
+            for (const [sectionKey, sectionData] of Object.entries(sections)) {
+                html += `
+                    <div class="kanban-column">
+                        <div class="kanban-header" style="border-color: ${sectionData.color}">
+                            <span>${sectionData.name}</span>
+                            <span class="kanban-count">${sectionData.items.length}</span>
+                        </div>
+                        <div class="kanban-items" id="kanban-${sectionKey}">
                 `;
-                return;
-            }
 
-            filtered.forEach(todo => {
-                const card = document.createElement("div");
-                card.className = `todo-card ${todo.is_done ? 'completed' : ''}`;
-                
-                const priorityBadge = `<span class="badge badge-priority-${todo.priority}">${todo.priority === 'high' ? 'Высокий' : todo.priority === 'medium' ? 'Средний' : 'Низкий'}</span>`;
-                
-                let dateBadge = "";
-                if (todo.due_date) {
-                    const date = new Date(todo.due_date);
-                    const formatted = date.toLocaleDateString("ru-RU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-                    dateBadge = `<span class="badge badge-date"><i class="fa-regular fa-clock"></i> ${formatted}</span>`;
+                if (sectionData.items.length === 0) {
+                    html += '<div class="kanban-empty">Hozircha bo\'sh</div>';
+                } else {
+                    sectionData.items.forEach(todo => {
+                        const priorityText = todo.priority === 'high' ? '🔴' : todo.priority === 'medium' ? '🟡' : '🔵';
+
+                        let sourceBadge = '';
+                        if (todo.source === 'promise') {
+                            sourceBadge = `<span class="badge badge-source-promise">🤝 Va'da</span>`;
+                            if (todo.from_chat_name) {
+                                sourceBadge += ` <span class="badge badge-chat">${escapeHTML(todo.from_chat_name)}</span>`;
+                            }
+                        } else if (todo.source === 'request') {
+                            sourceBadge = `<span class="badge badge-source-request">📨 So'rov</span>`;
+                            if (todo.from_chat_name) {
+                                sourceBadge += ` <span class="badge badge-chat">${escapeHTML(todo.from_chat_name)}</span>`;
+                            }
+                        }
+
+                        const followUpText = todo.follow_up_at
+                            ? `<span class="badge badge-date"><i class="fa-solid fa-bell"></i> ${new Date(todo.follow_up_at).toLocaleDateString("uz-UZ")}</span>`
+                            : '';
+
+                        const dueDateText = todo.due_date
+                            ? `<span class="badge badge-date"><i class="fa-regular fa-clock"></i> ${new Date(todo.due_date).toLocaleDateString("uz-UZ")}</span>`
+                            : '';
+
+                        html += `
+                            <div class="todo-card ${todo.is_done ? 'completed' : ''}" id="todo-card-${todo.id}">
+                                <div class="todo-content">
+                                    <div class="todo-title">${escapeHTML(todo.title)}</div>
+                                    ${todo.description ? `<p class="todo-desc">${escapeHTML(todo.description.substring(0, 100))}</p>` : ''}
+                                    <div class="todo-badges">
+                                        <span class="badge badge-priority-${todo.priority}">${priorityText}</span>
+                                        ${sourceBadge}
+                                        ${followUpText}
+                                        ${dueDateText}
+                                    </div>
+                                </div>
+                                <div class="todo-actions">
+                                    ${sectionKey !== 'bajarildi' ? `<button class="todo-action-btn btn-complete" onclick="completeTodo(${todo.id})" title="Bajarildi"><i class="fa-solid fa-check"></i></button>` : ''}
+                                    <button class="todo-action-btn btn-move" onclick="showMoveMenu(${todo.id}, this)" title="Ko'chirish"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+                                    <button class="todo-action-btn btn-delete" onclick="deleteTodo(${todo.id})" title="O'chirish"><i class="fa-regular fa-trash-can"></i></button>
+                                </div>
+                            </div>
+                        `;
+                    });
                 }
 
-                card.innerHTML = `
-                    <div class="todo-checkbox ${todo.is_done ? 'checked' : ''}" onclick="toggleTodoStatus(${todo.id}, ${!todo.is_done})">
-                        <i class="fa-solid fa-check"></i>
-                    </div>
-                    <div class="todo-content">
-                        <div class="todo-title">${escapeHTML(todo.title)}</div>
-                        ${todo.description ? `<p class="todo-desc">${escapeHTML(todo.description)}</p>` : ''}
-                        <div class="todo-badges">
-                            ${priorityBadge}
-                            ${dateBadge}
-                        </div>
-                    </div>
-                    <div class="todo-actions">
-                        <button class="todo-action-btn" onclick="deleteTodo(${todo.id})"><i class="fa-regular fa-trash-can"></i></button>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
+                html += '</div></div>';
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
         }
 
-        // Add Todo Form Submit
+        async function completeTodo(todoId) {
+            try {
+                const res = await fetch(`${apiBase}/api/todos/${todoId}/move-section`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ tg_id: tgId, section: "bajarildi" })
+                });
+                if (res.ok) {
+                    showToast("Vazifa bajarildi! 🎉");
+                    loadTodos();
+                } else {
+                    showToast("Xatolik yuz berdi.", "danger");
+                }
+            } catch (err) {
+                showToast("Tarmoq xatosi.", "danger");
+            }
+        }
+
+        function showMoveMenu(todoId, btnEl) {
+            document.querySelectorAll('.move-menu').forEach(m => m.remove());
+
+            const sections = [
+                { key: "vazifalar", label: "📌 Vazifalar" },
+                { key: "kutilmoqda", label: "⏳ Kutilmoqda" },
+                { key: "keraklilar", label: "🛒 Keraklilari" },
+                { key: "bajarildi", label: "✅ Bajarildi" },
+            ];
+
+            const menu = document.createElement("div");
+            menu.className = "move-menu";
+            menu.style.cssText = "position:absolute;background:#161b22;border:1px solid var(--border-color);border-radius:8px;padding:4px;z-index:200;box-shadow:0 8px 20px rgba(0,0,0,0.5);";
+
+            sections.forEach(s => {
+                const btn = document.createElement("button");
+                btn.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;background:none;border:none;color:var(--text-main);cursor:pointer;font-size:0.8rem;border-radius:4px;";
+                btn.textContent = s.label;
+                btn.onmouseover = () => { btn.style.background = "rgba(255,255,255,0.05)"; };
+                btn.onmouseout = () => { btn.style.background = "none"; };
+                btn.onclick = () => {
+                    moveToSection(todoId, s.key);
+                    menu.remove();
+                };
+                menu.appendChild(btn);
+            });
+
+            btnEl.parentElement.style.position = "relative";
+            btnEl.parentElement.appendChild(menu);
+
+            setTimeout(() => {
+                document.addEventListener("click", () => menu.remove(), { once: true });
+            }, 10);
+        }
+
+        async function moveToSection(todoId, section) {
+            try {
+                const res = await fetch(`${apiBase}/api/todos/${todoId}/move-section`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ tg_id: tgId, section: section })
+                });
+                if (res.ok) {
+                    showToast("Vazifa ko'chirildi!");
+                    loadTodos();
+                } else {
+                    showToast("Ko'chirib bo'lmadi.", "danger");
+                }
+            } catch (err) {
+                showToast("Tarmoq xatosi.", "danger");
+            }
+        }
+
+        // Add Todo Form
         let editingTodoId = null;
 
         function openAddTodoModal() {
             editingTodoId = null;
-            document.getElementById("todo-modal-title").innerText = "Добавить задачу";
+            document.getElementById("todo-modal-title").innerText = "Vazifa qo'shish";
             document.getElementById("todo-title-input").value = "";
             document.getElementById("todo-desc-input").value = "";
             document.getElementById("todo-priority-input").value = "medium";
+            document.getElementById("todo-section-input").value = "vazifalar";
             document.getElementById("todo-date-input").value = "";
             document.getElementById("todo-modal").classList.add("active");
         }
@@ -1858,10 +1980,11 @@
             const title = document.getElementById("todo-title-input").value.trim();
             const description = document.getElementById("todo-desc-input").value.trim();
             const priority = document.getElementById("todo-priority-input").value;
+            const section = document.getElementById("todo-section-input").value;
             const dueDate = document.getElementById("todo-date-input").value;
 
             if (!title) {
-                showToast("Введите название задачи!", "danger");
+                showToast("Vazifa nomini kiriting!", "danger");
                 return;
             }
 
@@ -1870,6 +1993,7 @@
                 title: title,
                 description: description || null,
                 priority: priority,
+                section: section,
                 due_date: dueDate ? new Date(dueDate).toISOString() : null
             };
 
@@ -1881,17 +2005,36 @@
                 });
 
                 if (res.ok) {
-                    showToast("Задача успешно создана!");
+                    showToast("Vazifa muvaffaqiyatli yaratildi!");
                     closeModal("todo-modal");
                     loadTodos();
                 } else {
-                    showToast("Не удалось добавить задачу.", "danger");
+                    showToast("Vazifa qo'shishda xatolik.", "danger");
                 }
             } catch (err) {
-                showToast("Сетевой сбой при создании задачи.", "danger");
+                showToast("Tarmoq xatosi.", "danger");
             }
         }
 
+        async function deleteTodo(todoId) {
+            if (!confirm("Ushbu vazifani o'chirmoqchimisiz?")) return;
+            try {
+                const res = await fetch(`${apiBase}/api/todos/${todoId}?tg_id=${tgId}`, {
+                    method: "DELETE"
+                });
+
+                if (res.ok) {
+                    showToast("Vazifa o'chirildi.");
+                    loadTodos();
+                } else {
+                    showToast("O'chirib bo'lmadi.", "danger");
+                }
+            } catch (err) {
+                showToast("Tarmoq xatosi.", "danger");
+            }
+        }
+
+        // Legacy toggle (still used internally by complete endpoint)
         async function toggleTodoStatus(todoId, checked) {
             try {
                 const res = await fetch(`${apiBase}/api/todos/${todoId}/complete?tg_id=${tgId}&is_done=${checked}`, {
@@ -1899,36 +2042,19 @@
                 });
 
                 if (res.ok) {
-                    showToast(checked ? "Задача завершена! 🎉" : "Задача снова открыта.");
+                    showToast(checked ? "Vazifa bajarildi! 🎉" : "Vazifa qayta ochildi.");
                     loadTodos();
                 } else {
-                    showToast("Не удалось обновить статус задачи.", "danger");
+                    showToast("Holat yangilanmadi.", "danger");
                 }
             } catch (err) {
-                showToast("Ошибка сети.", "danger");
-            }
-        }
-
-        async function deleteTodo(todoId) {
-            if (!confirm("Удалить эту задачу?")) return;
-            try {
-                const res = await fetch(`${apiBase}/api/todos/${todoId}?tg_id=${tgId}`, {
-                    method: "DELETE"
-                });
-
-                if (res.ok) {
-                    showToast("Задача удалена.");
-                    loadTodos();
-                } else {
-                    showToast("Не удалось удалить задачу.", "danger");
-                }
-            } catch (err) {
-                showToast("Сбой сети при удалении.", "danger");
+                showToast("Tarmoq xatosi.", "danger");
             }
         }
 
         // Utility helpers
         function escapeHTML(str) {
+            if (!str) return '';
             return str
                 .replace(/&/g, "&amp;")
                 .replace(/</g, "&lt;")

@@ -1,6 +1,8 @@
 import logging
 import asyncio
 import os
+import random
+from datetime import timedelta, timezone as tz
 from typing import Any, Optional, Union
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
@@ -209,19 +211,31 @@ class NexusUserbot:
                     
                     if task_data:
                         # We extracted a task! Save to database!
+                        from datetime import datetime
+                        section = "kutilmoqda" if is_outgoing else "vazifalar"
+                        source = "promise" if is_outgoing else "request"
+                        follow_up_hours = random.uniform(3, 5)
+                        follow_up_time = datetime.now(tz.utc) + timedelta(hours=follow_up_hours)
+
                         todo = await db_ops.add_todo(
                             db=db,
                             tg_id=settings.OWNER_ID,
                             title=task_data["title"],
                             description=task_data["description"],
                             priority=task_data["priority"],
-                            due_date=None # Or parse ISO timestamp if present
+                            due_date=None,
+                            section=section,
+                            source=source,
+                            from_chat_id=chat_id,
+                            from_chat_name=chat_title,
+                            original_message=message_text[:500],
+                            follow_up_at=follow_up_time,
                         )
                         await db.commit()
                         logger.success(f"Successfully auto-extracted task from chat: '{todo.title}'")
-                        
+
                         # Notify the owner via our Main Aiogram Bot!
-                        from telegram.bot import bot
+                        from telegram.bot import bot, update_pinned_board
                         if bot:
                             badge = "🔴 <b>Sizning va'dangiz aniqlandi:</b>" if is_outgoing else "🔵 <b>Sizga so'rov yuborildi:</b>"
                             notify_text = (
@@ -235,6 +249,9 @@ class NexusUserbot:
                                 text=notify_text,
                                 parse_mode="HTML"
                             )
+                            from database.connection import AsyncSessionLocal
+                            async with AsyncSessionLocal() as board_db:
+                                await update_pinned_board(bot, settings.OWNER_ID, board_db)
             except Exception as e:
                 logger.error(f"Error in Userbot message listener: {e}")
 
