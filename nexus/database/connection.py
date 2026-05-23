@@ -30,7 +30,7 @@ def _build_engine() -> AsyncEngine:
                         "gone away" errors from intermediate proxies
     
     Supabase (PgBouncer) transaction pooling fix:
-    - prepared_statement_cache_size=0: Disables SQLAlchemy prepared statement caching.
+    - connect_args={"prepared_statement_cache_size": 0}: Disables SQLAlchemy prepared statement caching.
     - connect_args={"statement_cache_size": 0}: Disables asyncpg native prepared statement caching.
     - connect_args={"prepared_statement_name_func": ...}: Generates unique names for anonymous 
       prepared statements so PgBouncer transaction mode never suffers from statement name collision.
@@ -42,9 +42,9 @@ def _build_engine() -> AsyncEngine:
         max_overflow=10,
         pool_pre_ping=True,
         pool_recycle=1800,
-        prepared_statement_cache_size=0,
         connect_args={
             "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
             "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4().hex}__"
         }
     )
