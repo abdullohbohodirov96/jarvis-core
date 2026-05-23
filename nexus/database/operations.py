@@ -191,14 +191,26 @@ async def add_todo(
     title: str,
     description: str | None = None,
     priority: str = "medium",
-    due_date: datetime | None = None
+    due_date: datetime | None = None,
+    section: str = "vazifalar",
+    source: str = "manual",
+    from_chat_id: int | None = None,
+    from_chat_name: str | None = None,
+    original_message: str | None = None,
+    follow_up_at: datetime | None = None,
 ) -> Todo:
     todo = Todo(
         tg_id=tg_id,
         title=title,
         description=description,
         priority=priority,
-        due_date=due_date
+        due_date=due_date,
+        section=section,
+        source=source,
+        from_chat_id=from_chat_id,
+        from_chat_name=from_chat_name,
+        original_message=original_message,
+        follow_up_at=follow_up_at,
     )
     db.add(todo)
     await db.flush()
@@ -217,6 +229,11 @@ async def complete_todo(db: AsyncSession, tg_id: int, todo_id: int, is_done: boo
     todo = await get_todo(db, tg_id, todo_id)
     if todo:
         todo.is_done = is_done
+        if is_done:
+            todo.section = "bajarildi"
+        else:
+            if getattr(todo, 'section', 'bajarildi') == 'bajarildi':
+                todo.section = "vazifalar"
         await db.flush()
     return todo
 
@@ -227,3 +244,42 @@ async def delete_todo(db: AsyncSession, tg_id: int, todo_id: int) -> bool:
         await db.flush()
         return True
     return False
+
+
+async def get_todos_pending_followup(db: AsyncSession) -> list[Todo]:
+    """Get all todos where follow_up_at <= now and follow_up_sent = False."""
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(Todo).where(
+            Todo.follow_up_at != None,
+            Todo.follow_up_at <= now,
+            Todo.follow_up_sent == False,
+            Todo.is_done == False
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def mark_followup_sent(db: AsyncSession, todo_id: int) -> None:
+    await db.execute(
+        update(Todo).where(Todo.id == todo_id).values(follow_up_sent=True)
+    )
+
+
+async def move_todo_section(db: AsyncSession, tg_id: int, todo_id: int, section: str) -> Todo | None:
+    todo = await get_todo(db, tg_id, todo_id)
+    if todo:
+        todo.section = section
+        if section == "bajarildi":
+            todo.is_done = True
+        elif section != "bajarildi" and todo.is_done:
+            todo.is_done = False
+        await db.flush()
+    return todo
+
+
+async def update_pinned_msg_id(db: AsyncSession, tg_id: int, msg_id: int) -> None:
+    await db.execute(
+        update(User).where(User.tg_id == tg_id).values(pinned_msg_id=msg_id)
+    )

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Optional
@@ -188,8 +189,8 @@ async def cmd_start(message: Message, db_user):
 @router.message(Command("tasks"))
 async def cmd_tasks(message: Message, db_session):
     todos = await db_ops.get_todos(db_session, message.from_user.id)
-    text = await render_tasks_message(db_session, message.from_user.id)
-    reply_markup = get_tasks_keyboard(todos)
+    text = render_board_message(todos)
+    reply_markup = get_board_keyboard(todos)
     await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
 @router.message(Command("allow"))
@@ -304,7 +305,7 @@ async def on_direct_chat_message(message: Message, db_session):
             due_date=due_date
         )
         await db_session.commit()
-        
+
         priority_emoji = "🔴" if todo.priority == "high" else "🟡" if todo.priority == "medium" else "🔵"
         await message.answer(
             f"✅ <b>Vazifa muvaffaqiyatli saqlandi!</b>\n\n"
@@ -314,6 +315,7 @@ async def on_direct_chat_message(message: Message, db_session):
             f"<i>Barcha vazifalar ro'yxatini ko'rish uchun /tasks yozing.</i>",
             parse_mode=ParseMode.HTML
         )
+        await update_pinned_board(bot, message.from_user.id, db_session)
     else:
         # Just answer with a friendly message explaining what the bot can do
         help_text = (

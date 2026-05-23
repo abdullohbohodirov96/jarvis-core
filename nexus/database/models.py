@@ -53,6 +53,13 @@ class User(Base):
         doc="List of Telegram chat IDs/usernames to monitor and analyze."
     )
 
+    pinned_msg_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+        default=None,
+        doc="Message ID of the pinned TODO board in the bot chat."
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -180,6 +187,58 @@ class Todo(Base):
         DateTime(timezone=True),
         nullable=True,
         default=None
+    )
+
+    section: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="vazifalar",
+        server_default="vazifalar",
+        doc="Section of the kanban board: 'vazifalar' | 'kutilmoqda' | 'keraklilar' | 'bajarildi'"
+    )
+
+    source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="manual",
+        server_default="manual",
+        doc="How the todo was created: 'manual' | 'promise' | 'request'"
+    )
+
+    from_chat_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+        default=None,
+        doc="Telegram chat ID where the promise/request was detected."
+    )
+
+    from_chat_name: Mapped[str | None] = mapped_column(
+        String(256),
+        nullable=True,
+        default=None,
+        doc="Name of the Telegram chat where the promise/request was detected."
+    )
+
+    original_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        default=None,
+        doc="Original message text that triggered todo creation."
+    )
+
+    follow_up_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+        doc="UTC datetime when a follow-up reminder should be sent."
+    )
+
+    follow_up_sent: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        doc="Whether the follow-up reminder has been sent."
     )
 
     created_at: Mapped[datetime] = mapped_column(
