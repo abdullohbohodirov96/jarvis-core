@@ -27,6 +27,10 @@ def _build_engine() -> AsyncEngine:
     - pool_pre_ping   : discard stale connections before lending them out
     - pool_recycle    : recycle connections older than 30 min to avoid
                         "gone away" errors from intermediate proxies
+    
+    Supabase (PgBouncer) transaction pooling fix:
+    - connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0}
+      Disables client-side prepared statement caching to prevent DuplicatePreparedStatementError.
     """
     return create_async_engine(
         settings.DATABASE_URL,
@@ -35,6 +39,10 @@ def _build_engine() -> AsyncEngine:
         max_overflow=10,
         pool_pre_ping=True,
         pool_recycle=1800,
+        connect_args={
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0
+        }
     )
 
 
