@@ -1,3 +1,4 @@
+import uuid
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -29,8 +30,10 @@ def _build_engine() -> AsyncEngine:
                         "gone away" errors from intermediate proxies
     
     Supabase (PgBouncer) transaction pooling fix:
-    - connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0}
-      Disables client-side prepared statement caching to prevent DuplicatePreparedStatementError.
+    - prepared_statement_cache_size=0: Disables SQLAlchemy prepared statement caching.
+    - connect_args={"statement_cache_size": 0}: Disables asyncpg native prepared statement caching.
+    - connect_args={"prepared_statement_name_func": ...}: Generates unique names for anonymous 
+      prepared statements so PgBouncer transaction mode never suffers from statement name collision.
     """
     return create_async_engine(
         settings.DATABASE_URL,
@@ -39,9 +42,10 @@ def _build_engine() -> AsyncEngine:
         max_overflow=10,
         pool_pre_ping=True,
         pool_recycle=1800,
+        prepared_statement_cache_size=0,
         connect_args={
             "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4().hex}__"
         }
     )
 
@@ -87,7 +91,7 @@ async def init_db() -> None:
 
     Called once at application startup.  Safe to call on every restart —
     SQLAlchemy uses ``CREATE TABLE IF NOT EXISTS`` semantics via
-    ``checkfirst=True`` (the default for ``create_all``).
+    ```checkfirst=True``` (the default for ```create_all```).
     """
     from database import models  # noqa: F401 — side-effect: registers models
 

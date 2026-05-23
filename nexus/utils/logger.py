@@ -9,10 +9,10 @@ def _build_format(record: dict) -> str:
         "TRACE": "<cyan>",
         "DEBUG": "<blue>",
         "INFO": "<green>",
-        "SUCCESS": "<bold><green>",
+        "SUCCESS": "<green>",
         "WARNING": "<yellow>",
         "ERROR": "<red>",
-        "CRITICAL": "<bold><red>",
+        "CRITICAL": "<red>",
     }
     level_name: str = record["level"].name
     color = level_colors.get(level_name, "<white>")
