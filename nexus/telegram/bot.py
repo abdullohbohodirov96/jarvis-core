@@ -89,23 +89,39 @@ async def cmd_start(message: Message, db_user):
     name = message.from_user.first_name
     admin_badge = " [Администратор]" if db_user.is_admin else ""
     
-    # Inline keyboard with WebAppInfo
-    builder = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="🚀 Открыть NEXUS App",
-                web_app=WebAppInfo(url=settings.MINI_APP_URL)
-            )
-        ]
-    ])
+    # Safe check of MINI_APP_URL
+    app_url = settings.MINI_APP_URL.strip() if settings.MINI_APP_URL else ""
+    reply_markup = None
+    warning_text = ""
+    
+    if app_url.startswith("http://") or app_url.startswith("https://"):
+        # Valid URL format
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀 Открыть NEXUS App",
+                    web_app=WebAppInfo(url=app_url)
+                )
+            ]
+        ])
+    else:
+        # Invalid / Empty URL
+        warning_text = (
+            "\n\n⚠️ <b>Предупреждение разработчику:</b>\n"
+            "Переменная <code>MINI_APP_URL</code> в файле <code>.env</code> не задана или имеет неверный формат (должна начинаться с https://).\n"
+            "Кнопка запуска WebApp скрыта во избежание сбоев."
+        )
     
     welcome_text = (
         f"👋 Привет, <b>{name}</b>!{admin_badge}\n\n"
         f"Добро пожаловать в <b>NEXUS</b> — вашу личную платформу управления интеграциями и задачами.\n\n"
-        f"Все управление осуществляется через графический интерфейс в Telegram Mini App.\n"
-        f"Нажмите кнопку ниже, чтобы войти в приложение! 👇"
+        f"Все управление осуществляется через графический интерфейс в Telegram Mini App.{warning_text}"
     )
-    await message.answer(welcome_text, parse_mode=ParseMode.HTML, reply_markup=builder)
+    
+    if reply_markup:
+        await message.answer(welcome_text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    else:
+        await message.answer(welcome_text, parse_mode=ParseMode.HTML)
 
 @router.message(Command("allow"))
 async def cmd_allow(message: Message, command: CommandObject, db_session, db_user):
