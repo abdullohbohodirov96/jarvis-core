@@ -1,6 +1,8 @@
 import logging
 import asyncio
 import os
+import random
+from datetime import timedelta, timezone as tz
 from typing import Any, Optional, Union
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
@@ -125,37 +127,35 @@ class NexusUserbot:
         return chats
 
     async def start_listening(self) -> None:
-        """Start listening for incoming/outgoing messages in whitelisted chats."""
+        """Start listening for ALL incoming/outgoing messages across all chats."""
         global is_listener_running, userbot_client
         if is_listener_running:
             return
-            
+
         client = self.get_client()
         if not await self.is_connected():
             logger.warning("Cannot start listening, Userbot not authorized.")
             return
 
         is_listener_running = True
-        logger.info("🟢 Starting Userbot background conversation monitoring daemon...")
+        logger.info("🟢 Starting Userbot — monitoring ALL chats for va'da/so'rov...")
         analyzer = NexusAnalyzer()
 
-        @client.on(events.NewMessage())
+        @client.on(events.NewMessage(incoming=True, outgoing=True))
         async def on_new_message(event: events.NewMessage.Event):
             try:
-                # Get chat id
+                message_text = event.message.message or ""
+                # Skip empty or very short messages (greetings, emoji-only, etc.)
+                if len(message_text.strip()) < 15:
+                    return
+
                 chat_id = event.chat_id
-                
-                # Fetch whitelisted chats for the owner
+
                 async with AsyncSessionLocal() as db:
                     owner = await db_ops.get_user(db, settings.OWNER_ID)
                     if not owner or not owner.is_allowed:
                         return
-                        
-                    analyzed_chats = owner.analyzed_chats or []
-                    # Check if this chat_id is in analyzed_chats list
-                    if chat_id not in analyzed_chats:
-                        return
-                        
+
                     # Extract sender name
                     sender = await event.get_sender()
                     sender_name = "Unknown"
@@ -166,12 +166,10 @@ class NexusUserbot:
                             
                     # Context / Chat Title
                     chat = await event.get_chat()
-                    chat_title = getattr(chat, "title", "Private Chat")
-                    
-                    # Analyze message using AI with dialogue context history (last 5 messages)
+                    chat_title = getattr(chat, "title", sender_name)
+
                     is_outgoing = event.out
-                    message_text = event.message.message or ""
-                    
+
                     # Fetch dialogue history context
                     history_text = ""
                     try:
@@ -209,32 +207,50 @@ class NexusUserbot:
                     
                     if task_data:
                         # We extracted a task! Save to database!
+                        from datetime import datetime
+                        section = "kutilmoqda" if is_outgoing else "vazifalar"
+                        source = "promise" if is_outgoing else "request"
+                        follow_up_hours = random.uniform(3, 5)
+                        follow_up_time = datetime.now(tz.utc) + timedelta(hours=follow_up_hours)
+
                         todo = await db_ops.add_todo(
                             db=db,
                             tg_id=settings.OWNER_ID,
                             title=task_data["title"],
                             description=task_data["description"],
                             priority=task_data["priority"],
-                            due_date=None # Or parse ISO timestamp if present
+                            due_date=None,
+                            section=section,
+                            source=source,
+                            from_chat_id=chat_id,
+                            from_chat_name=chat_title,
+                            original_message=message_text[:500],
+                            follow_up_at=follow_up_time,
                         )
                         await db.commit()
-                        logger.success(f"Successfully auto-extracted task from chat: '{todo.title}'")
-                        
+                        logger.info(f"Successfully auto-extracted task from chat: '{todo.title}'")
+
                         # Notify the owner via our Main Aiogram Bot!
-                        from telegram.bot import bot
-                        if bot:
-                            badge = "🔴 <b>Sizning va'dangiz aniqlandi:</b>" if is_outgoing else "🔵 <b>Sizga so'rov yuborildi:</b>"
-                            notify_text = (
-                                f"{badge}\n\n"
-                                f"📝 <b>{todo.title}</b>\n"
-                                f"📋 {todo.description}\n\n"
-                                f"<i>Men ushbu vazifani NEXUS ro'yxatingizga avtomatik ravishda qo'shib qo'ydim.</i>"
-                            )
-                            await bot.send_message(
-                                chat_id=settings.OWNER_ID,
-                                text=notify_text,
-                                parse_mode="HTML"
-                            )
+                        try:
+                            from telegram.bot import bot, update_pinned_board
+                            if bot:
+                                badge = "🔴 <b>Sizning va'dangiz aniqlandi:</b>" if is_outgoing else "🔵 <b>Sizga so'rov yuborildi:</b>"
+                                notify_text = (
+                                    f"{badge}\n\n"
+                                    f"📝 <b>{todo.title}</b>\n"
+                                    f"📋 {todo.description}\n\n"
+                                    f"<i>Men ushbu vazifani NEXUS ro'yxatingizga avtomatik ravishda qo'shib qo'ydim.</i>"
+                                )
+                                await bot.send_message(
+                                    chat_id=settings.OWNER_ID,
+                                    text=notify_text,
+                                    parse_mode="HTML"
+                                )
+                                from database.connection import AsyncSessionLocal
+                                async with AsyncSessionLocal() as board_db:
+                                    await update_pinned_board(bot, settings.OWNER_ID, board_db)
+                        except Exception as notify_err:
+                            logger.warning(f"Failed to send task notification: {notify_err}")
             except Exception as e:
                 logger.error(f"Error in Userbot message listener: {e}")
 

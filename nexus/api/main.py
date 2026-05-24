@@ -96,7 +96,12 @@ class TodoAddRequest(BaseModel):
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
     priority: str = "medium"
-    due_date: Optional[str] = None # ISO format string
+    due_date: Optional[str] = None  # ISO format string
+    section: str = "vazifalar"
+
+class MoveSectionRequest(BaseModel):
+    tg_id: int
+    section: str  # "vazifalar" | "kutilmoqda" | "keraklilar" | "bajarildi"
 
 class TodoUpdateRequest(BaseModel):
     tg_id: int
@@ -373,8 +378,12 @@ async def get_todos(
                 "title": todo.title,
                 "description": todo.description,
                 "is_done": todo.is_done,
+                "section": getattr(todo, 'section', 'vazifalar'),
+                "source": getattr(todo, 'source', 'manual'),
+                "from_chat_name": getattr(todo, 'from_chat_name', None),
                 "priority": todo.priority,
                 "due_date": todo.due_date.isoformat() if todo.due_date else None,
+                "follow_up_at": todo.follow_up_at.isoformat() if getattr(todo, 'follow_up_at', None) else None,
                 "created_at": todo.created_at.isoformat()
             }
             for todo in todos
@@ -397,7 +406,8 @@ async def add_todo(req: TodoAddRequest, db: AsyncSession = Depends(get_db)):
             title=req.title,
             description=req.description,
             priority=req.priority,
-            due_date=due
+            due_date=due,
+            section=req.section,
         )
         await db.commit()
         return {
@@ -407,8 +417,12 @@ async def add_todo(req: TodoAddRequest, db: AsyncSession = Depends(get_db)):
                 "title": todo.title,
                 "description": todo.description,
                 "is_done": todo.is_done,
+                "section": getattr(todo, 'section', 'vazifalar'),
+                "source": getattr(todo, 'source', 'manual'),
+                "from_chat_name": getattr(todo, 'from_chat_name', None),
                 "priority": todo.priority,
                 "due_date": todo.due_date.isoformat() if todo.due_date else None,
+                "follow_up_at": todo.follow_up_at.isoformat() if getattr(todo, 'follow_up_at', None) else None,
                 "created_at": todo.created_at.isoformat()
             }
         }
@@ -472,6 +486,23 @@ async def complete_todo(
         }
     except Exception as exc:
         logger.exception("Complete todo failed: {}", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.post("/api/todos/{id}/move-section")
+async def move_todo_to_section(id: int, req: MoveSectionRequest, db: AsyncSession = Depends(get_db)):
+    await get_authorized_user(req.tg_id, db)
+    valid_sections = {"vazifalar", "kutilmoqda", "keraklilar", "bajarildi"}
+    if req.section not in valid_sections:
+        raise HTTPException(status_code=400, detail="Invalid section")
+    try:
+        todo = await db_ops.move_todo_section(db, req.tg_id, id, req.section)
+        if not todo:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await db.commit()
+        return {"success": True, "section": todo.section}
+    except HTTPException:
+        raise
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
 @app.delete("/api/todos/{id}")

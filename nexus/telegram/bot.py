@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Optional
@@ -185,11 +186,112 @@ async def cmd_start(message: Message, db_user):
     else:
         await message.answer(welcome_text, parse_mode=ParseMode.HTML)
 
+def render_board_message(todos: list) -> str:
+    """Render the 4-section TODO board as a text message."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+
+    sections = {
+        "vazifalar": [],
+        "kutilmoqda": [],
+        "keraklilar": [],
+        "bajarildi": []
+    }
+
+    for t in todos:
+        section = getattr(t, 'section', 'vazifalar')
+        if section in sections:
+            sections[section].append(t)
+
+    lines = ["📋 <b>JARVIS — Vazifalar Taxtasi</b>\n"]
+    lines.append(f"🕐 Yangilandi: {now.strftime('%d.%m %H:%M')} UTC\n")
+
+    emojis = {"vazifalar": "📌", "kutilmoqda": "⏳", "keraklilar": "🛒", "bajarildi": "✅"}
+    names = {"vazifalar": "VAZIFALAR", "kutilmoqda": "KUTILMOQDA", "keraklilar": "KERAKLILARI", "bajarildi": "BAJARILDI"}
+
+    for section_key in ["vazifalar", "kutilmoqda", "keraklilar", "bajarildi"]:
+        items = sections[section_key]
+        lines.append(f"\n{emojis[section_key]} <b>{names[section_key]}</b> ({len(items)})")
+        if items:
+            for t in items[:5]:
+                priority_mark = "🔴" if t.priority == "high" else "🟡" if t.priority == "medium" else "🔵"
+                lines.append(f"  {priority_mark} {t.title}")
+            if len(items) > 5:
+                lines.append(f"  <i>... va yana {len(items)-5} ta</i>")
+        else:
+            lines.append("  <i>Bo'sh</i>")
+
+    total_active = len(sections["vazifalar"]) + len(sections["kutilmoqda"]) + len(sections["keraklilar"])
+    lines.append(f"\n<i>Jami faol: {total_active} | Bajarildi: {len(sections['bajarildi'])}</i>")
+
+    return "\n".join(lines)
+
+
+def get_board_keyboard(todos: list) -> InlineKeyboardMarkup:
+    """Generate keyboard for the board message."""
+    builder = InlineKeyboardBuilder()
+
+    active_todos = [t for t in todos if not t.is_done][:3]
+    for todo in active_todos:
+        builder.row(
+            InlineKeyboardButton(text=f"✅ {todo.title[:20]}", callback_data=f"todo_complete:{todo.id}"),
+        )
+
+    builder.row(
+        InlineKeyboardButton(text="🔄 Yangilash", callback_data="todo_refresh"),
+        InlineKeyboardButton(text="📊 To'liq hisobot", callback_data="full_report"),
+    )
+
+    app_url = settings.MINI_APP_URL.strip() if settings.MINI_APP_URL else ""
+    if app_url.startswith("http"):
+        builder.row(
+            InlineKeyboardButton(text="🚀 Mini App", web_app=WebAppInfo(url=app_url))
+        )
+
+    return builder.as_markup()
+
+
+async def update_pinned_board(bot_instance, tg_id: int, db_session) -> None:
+    """Update or create the pinned TODO board message in the bot chat."""
+    try:
+        todos = await db_ops.get_todos(db_session, tg_id)
+        user = await db_ops.get_user(db_session, tg_id)
+
+        text = render_board_message(todos)
+        keyboard = get_board_keyboard(todos)
+
+        if user and user.pinned_msg_id:
+            try:
+                await bot_instance.edit_message_text(
+                    chat_id=tg_id,
+                    message_id=user.pinned_msg_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=keyboard
+                )
+                return
+            except Exception:
+                pass
+
+        # Send new pinned message
+        msg = await bot_instance.send_message(
+            chat_id=tg_id,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+        await bot_instance.pin_chat_message(chat_id=tg_id, message_id=msg.message_id, disable_notification=True)
+        await db_ops.update_pinned_msg_id(db_session, tg_id, msg.message_id)
+        await db_session.commit()
+    except Exception as e:
+        logger.error(f"Error updating pinned board: {e}")
+
+
 @router.message(Command("tasks"))
 async def cmd_tasks(message: Message, db_session):
     todos = await db_ops.get_todos(db_session, message.from_user.id)
-    text = await render_tasks_message(db_session, message.from_user.id)
-    reply_markup = get_tasks_keyboard(todos)
+    text = render_board_message(todos)
+    reply_markup = get_board_keyboard(todos)
     await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
 @router.message(Command("allow"))
@@ -301,10 +403,12 @@ async def on_direct_chat_message(message: Message, db_session):
             title=task_data["title"],
             description=task_data.get("description") or "Kiritilgan matn orqali AI tomonidan yaratilgan vazifa.",
             priority=task_data.get("priority", "medium"),
-            due_date=due_date
+            due_date=due_date,
+            section="vazifalar",
+            source="manual",
         )
         await db_session.commit()
-        
+
         priority_emoji = "🔴" if todo.priority == "high" else "🟡" if todo.priority == "medium" else "🔵"
         await message.answer(
             f"✅ <b>Vazifa muvaffaqiyatli saqlandi!</b>\n\n"
@@ -314,6 +418,7 @@ async def on_direct_chat_message(message: Message, db_session):
             f"<i>Barcha vazifalar ro'yxatini ko'rish uchun /tasks yozing.</i>",
             parse_mode=ParseMode.HTML
         )
+        await update_pinned_board(bot, message.from_user.id, db_session)
     else:
         # Just answer with a friendly message explaining what the bot can do
         help_text = (
@@ -332,16 +437,20 @@ async def on_direct_chat_message(message: Message, db_session):
 async def on_callback_todo_complete(callback: CallbackQuery, db_session):
     todo_id = int(callback.data.split(":")[1])
     todo = await db_ops.complete_todo(db_session, callback.from_user.id, todo_id, is_done=True)
-    
+
     if todo:
+        todo_title = todo.title
         await db_session.commit()
-        await callback.answer(f"✅ Vazifa bajarildi: '{todo.title}'")
-        
-        # Refresh message
+        await callback.answer(f"✅ Vazifa bajarildi: '{todo_title}'")
+
         todos = await db_ops.get_todos(db_session, callback.from_user.id)
-        text = await render_tasks_message(db_session, callback.from_user.id)
-        reply_markup = get_tasks_keyboard(todos)
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        text = render_board_message(todos)
+        reply_markup = get_board_keyboard(todos)
+        try:
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        except Exception:
+            pass
+        await update_pinned_board(bot, callback.from_user.id, db_session)
     else:
         await callback.answer("❌ Vazifa topilmadi.", show_alert=True)
 
@@ -349,16 +458,19 @@ async def on_callback_todo_complete(callback: CallbackQuery, db_session):
 async def on_callback_todo_delete(callback: CallbackQuery, db_session):
     todo_id = int(callback.data.split(":")[1])
     success = await db_ops.delete_todo(db_session, callback.from_user.id, todo_id)
-    
+
     if success:
         await db_session.commit()
         await callback.answer("🗑 Vazifa muvaffaqiyatli o'chirildi.")
-        
-        # Refresh message
+
         todos = await db_ops.get_todos(db_session, callback.from_user.id)
-        text = await render_tasks_message(db_session, callback.from_user.id)
-        reply_markup = get_tasks_keyboard(todos)
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        text = render_board_message(todos)
+        reply_markup = get_board_keyboard(todos)
+        try:
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        except Exception:
+            pass
+        await update_pinned_board(bot, callback.from_user.id, db_session)
     else:
         await callback.answer("❌ Vazifa topilmadi.", show_alert=True)
 
@@ -383,17 +495,19 @@ async def on_callback_todo_set_pri(callback: CallbackQuery, db_session):
     parts = callback.data.split(":")
     todo_id = int(parts[1])
     priority = parts[2]
-    
+
     todo = await db_ops.update_todo(db_session, callback.from_user.id, todo_id, {"priority": priority})
     if todo:
         await db_session.commit()
         await callback.answer(f"🔥 Ustuvorlik {priority.upper()} qilib o'zgartirildi!")
-        
-        # Refresh message
+
         todos = await db_ops.get_todos(db_session, callback.from_user.id)
-        text = await render_tasks_message(db_session, callback.from_user.id)
-        reply_markup = get_tasks_keyboard(todos)
-        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        text = render_board_message(todos)
+        reply_markup = get_board_keyboard(todos)
+        try:
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        except Exception:
+            pass
     else:
         await callback.answer("❌ Xatolik yuz berdi.", show_alert=True)
 
@@ -401,35 +515,112 @@ async def on_callback_todo_set_pri(callback: CallbackQuery, db_session):
 async def on_callback_todo_refresh(callback: CallbackQuery, db_session):
     await callback.answer("🔄 Ro'yxat yangilandi.")
     todos = await db_ops.get_todos(db_session, callback.from_user.id)
-    text = await render_tasks_message(db_session, callback.from_user.id)
-    reply_markup = get_tasks_keyboard(todos)
+    text = render_board_message(todos)
+    reply_markup = get_board_keyboard(todos)
     await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
-# ── 5. Lifecycle functions ──
+@router.callback_query(F.data == "full_report")
+async def on_full_report(callback: CallbackQuery, db_session):
+    await callback.answer("📊 Hisobot tayyorlanmoqda...")
+    todos = await db_ops.get_todos(db_session, callback.from_user.id)
+
+    sections = {"vazifalar": [], "kutilmoqda": [], "keraklilar": [], "bajarildi": []}
+    for t in todos:
+        section = getattr(t, 'section', 'vazifalar')
+        if section in sections:
+            sections[section].append(t)
+
+    report = "📊 <b>TO'LIQ HISOBOT</b>\n\n"
+
+    for section_key, name, emoji in [
+        ("vazifalar", "VAZIFALAR", "📌"),
+        ("kutilmoqda", "KUTILMOQDA", "⏳"),
+        ("keraklilar", "KERAKLILARI", "🛒"),
+        ("bajarildi", "BAJARILDI", "✅"),
+    ]:
+        items = sections[section_key]
+        report += f"{emoji} <b>{name}</b>:\n"
+        if items:
+            for t in items:
+                priority_mark = "🔴" if t.priority == "high" else "🟡" if t.priority == "medium" else "🔵"
+                src = ""
+                if getattr(t, 'source', 'manual') == 'promise':
+                    src = " [va'da]"
+                elif getattr(t, 'source', 'manual') == 'request':
+                    src = " [so'rov]"
+                report += f"  {priority_mark} {t.title}{src}\n"
+                if t.description:
+                    report += f"      <i>{t.description[:80]}</i>\n"
+        else:
+            report += "  <i>Bo'sh</i>\n"
+        report += "\n"
+
+    await callback.message.answer(report, parse_mode="HTML")
+
+# ── 5. Follow-up Callback Handlers ──
+
+@router.callback_query(F.data.startswith("fu_done:"))
+async def on_followup_done(callback: CallbackQuery, db_session):
+    todo_id = int(callback.data.split(":")[1])
+    todo = await db_ops.move_todo_section(db_session, callback.from_user.id, todo_id, "bajarildi")
+    if todo:
+        await db_session.commit()
+        await callback.answer("🎉 Ajoyib! Vazifa bajarildi deb belgilandi.")
+        await callback.message.edit_text(
+            callback.message.text + "\n\n✅ <b>Bajarildi!</b>",
+            parse_mode="HTML",
+            reply_markup=None
+        )
+        await update_pinned_board(bot, callback.from_user.id, db_session)
+    else:
+        await callback.answer("❌ Vazifa topilmadi.", show_alert=True)
+
+@router.callback_query(F.data.startswith("fu_pending:"))
+async def on_followup_pending(callback: CallbackQuery, db_session):
+    await callback.answer("⏳ Tushundim. Keyinroq qayta eslataman.")
+    await callback.message.edit_reply_markup(reply_markup=None)
+
+@router.callback_query(F.data.startswith("fu_cancel:"))
+async def on_followup_cancel(callback: CallbackQuery, db_session):
+    todo_id = int(callback.data.split(":")[1])
+    success = await db_ops.delete_todo(db_session, callback.from_user.id, todo_id)
+    if success:
+        await db_session.commit()
+        await callback.answer("🗑 Vazifa o'chirildi.")
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await update_pinned_board(bot, callback.from_user.id, db_session)
+    else:
+        await callback.answer("❌ Xatolik yuz berdi.", show_alert=True)
+
+# ── 6. Lifecycle functions ──
 
 async def start_bot():
     global bot, dp
     logger.info("Initializing NEXUS Telegram Bot (aiogram v3)...")
-    
+
     bot = Bot(
         token=settings.TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
-    
+
     # Register Access Control Middleware
     dp.message.middleware(AccessMiddleware())
     dp.callback_query.middleware(AccessMiddleware())
-    
+
     # Register Handlers Router
     dp.include_router(router)
-    
+
+    # Start follow-up scheduler as background task
+    from telegram.followup import run_followup_scheduler
+    asyncio.create_task(run_followup_scheduler(bot), name="followup_scheduler")
+
     # Start polling
     logger.info("Starting bot polling event loop...")
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except Exception as e:
-        logger.exception("Fatal error in aiogram polling: {}", e)
+        logger.exception("Fatal error in aiogram polling: %s", e)
 
 async def stop_bot():
     global bot, dp
