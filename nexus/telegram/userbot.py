@@ -127,37 +127,35 @@ class NexusUserbot:
         return chats
 
     async def start_listening(self) -> None:
-        """Start listening for incoming/outgoing messages in whitelisted chats."""
+        """Start listening for ALL incoming/outgoing messages across all chats."""
         global is_listener_running, userbot_client
         if is_listener_running:
             return
-            
+
         client = self.get_client()
         if not await self.is_connected():
             logger.warning("Cannot start listening, Userbot not authorized.")
             return
 
         is_listener_running = True
-        logger.info("🟢 Starting Userbot background conversation monitoring daemon...")
+        logger.info("🟢 Starting Userbot — monitoring ALL chats for va'da/so'rov...")
         analyzer = NexusAnalyzer()
 
-        @client.on(events.NewMessage())
+        @client.on(events.NewMessage(incoming=True, outgoing=True))
         async def on_new_message(event: events.NewMessage.Event):
             try:
-                # Get chat id
+                message_text = event.message.message or ""
+                # Skip empty or very short messages (greetings, emoji-only, etc.)
+                if len(message_text.strip()) < 15:
+                    return
+
                 chat_id = event.chat_id
-                
-                # Fetch whitelisted chats for the owner
+
                 async with AsyncSessionLocal() as db:
                     owner = await db_ops.get_user(db, settings.OWNER_ID)
                     if not owner or not owner.is_allowed:
                         return
-                        
-                    analyzed_chats = owner.analyzed_chats or []
-                    # Check if this chat_id is in analyzed_chats list
-                    if chat_id not in analyzed_chats:
-                        return
-                        
+
                     # Extract sender name
                     sender = await event.get_sender()
                     sender_name = "Unknown"
@@ -168,12 +166,10 @@ class NexusUserbot:
                             
                     # Context / Chat Title
                     chat = await event.get_chat()
-                    chat_title = getattr(chat, "title", "Private Chat")
-                    
-                    # Analyze message using AI with dialogue context history (last 5 messages)
+                    chat_title = getattr(chat, "title", sender_name)
+
                     is_outgoing = event.out
-                    message_text = event.message.message or ""
-                    
+
                     # Fetch dialogue history context
                     history_text = ""
                     try:
