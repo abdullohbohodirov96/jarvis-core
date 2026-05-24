@@ -620,7 +620,7 @@ async def start_bot():
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except Exception as e:
-        logger.exception("Fatal error in aiogram polling: {}", e)
+        logger.exception("Fatal error in aiogram polling: %s", e)
 
 async def stop_bot():
     global bot, dp
